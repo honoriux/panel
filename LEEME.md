@@ -49,7 +49,15 @@ La app se niega a conectar si el repositorio es público, si es el de Savey (`sa
 
 Cuando el token caduque verás un aviso en Inicio y en Configuración. Crea uno nuevo y pégalo en el mismo sitio.
 
-## 4. No perder los datos
+## 4. Gastos de Savey (solo lectura)
+
+La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado frente al presupuesto general (con una rayita que marca en qué día del mes vas), los ingresos, las 5 categorías con más gasto (con su presupuesto si lo tienen) y los 5 próximos recurrentes. Lee `datos.json` de `savey-data` y **nunca escribe en él**.
+
+**Una sola vez**, crea un token de solo lectura (distinto de los otros dos): [Fine-grained tokens → Generate new token](https://github.com/settings/personal-access-tokens/new), nombre `panel-gastos`, *Only select repositories* → `savey-data`, *Contents*: **Read-only**.
+
+**En cada dispositivo:** pestaña **Gastos → Conectar con Savey** (o ⚙️ **Configuración → Conectar gastos de Savey**), con tu usuario, `savey-data` y ese token. Se actualiza al abrir la pestaña (como mucho cada 5 minutos) o con **⟳ Actualizar**, y guarda el último resumen para verlo sin conexión. El token y el resumen se quedan solo en el dispositivo: no van a `panel-data` ni a las copias.
+
+## 5. No perder los datos
 
 - Con la sincronización activada, GitHub ya guarda todo y su historial. Inicio solo te avisa si lleva más de una semana sin sincronizar.
 - Sin sincronización: ⚙️ **Configuración → Copia de seguridad** genera un `panel-AAAA-MM-DD.json` con todo. Guárdalo en iCloud Drive. Si hace más de un mes de la última, Inicio te lo recuerda. Para pasarlo a otro dispositivo: **Restaurar copia de seguridad**.
@@ -58,7 +66,7 @@ Cuando el token caduque verás un aviso en Inicio y en Configuración. Crea uno 
 ## Qué hace (por ahora)
 
 - **Inicio**: lo que vence en los próximos 60 días y lo ya vencido, ordenado por días restantes. En rojo lo que ya está dentro de su aviso.
-  Debajo, las tareas vencidas o para esta semana y los días libres que te quedan este año (y los del anterior, si aún te quedan).
+  Debajo, las tareas vencidas, de esta semana o sin fecha, y los días libres que te quedan este año (y los del anterior, si aún te quedan).
 - **Caducidades**: alta, edición y **Hecho / renovado**. Si se repite (cada año, cada 2 o cada N años), al marcarla se crea sola la siguiente fecha. Las hechas quedan plegadas al final.
 - **Tareas**: personales y de trabajo, con filtro, fecha opcional y prioridad. Se agrupan en vencidas, hoy, esta semana, más adelante y sin fecha. Toca el círculo para completarla; las completadas quedan plegadas.
 - **Trabajo**:
@@ -68,11 +76,12 @@ Cuando el token caduque verás un aviso en Inicio y en Configuración. Crea uno 
   - **Festivos de Sevilla** (plegados al final): **Cargar festivos de Sevilla** añade los de 2026 o 2027 que caen entre semana y no son fiesta nacional (Junta de Andalucía y Ayuntamiento de Sevilla). Cada uno muestra si ya lo has pedido o un botón **Pedir**. Borra los que tu empresa no dé; no se vuelven a cargar.
   - **No laborables**: las fiestas nacionales y los días de empresa del año, plegados, solo para consultar.
   - **Calendario** (selector Lista / Mes / Año): el calendario laboral con colores. Gris para el fin de semana, rojo para las fiestas nacionales y los días de empresa, verde para lo aprobado o disfrutado, amarillo para lo pedido y sin aprobar, y azul con borde discontinuo para lo planificado sin pedir. Hoy va marcado con un círculo. Toca un día para ver qué es y pedirlo; en la vista anual, toca un mes para abrirlo.
+- **Gastos**: resumen del mes de SaveyCustom, solo lectura (ver el apartado 4).
 - **Botón +**: añade lo que toca según la pestaña (en Inicio y Trabajo te pregunta qué).
 
 ## Actualizar la app
 
-Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` (ahora va por `v1`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
+Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` (ahora va por `v2`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
 
 Para regenerar los iconos: `python tools/generar_iconos.py`.
 
