@@ -4,7 +4,7 @@
    Los datos viven en el dispositivo (localStorage); la sincronización con GitHub llega en la fase 3. */
 
 // Versión de la app: tiene que coincidir siempre con CACHE de sw.js (se suben las dos juntas en cada publicación)
-const APP_VERSION = 'panel-v6';
+const APP_VERSION = 'panel-v7';
 const KEY = 'panel.db.v1';
 const $ = (s, r = document) => r.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -672,6 +672,8 @@ function fechaEnSitio(input, s, valor = input.value, vacio = 'Seleccionar ›') 
     v.textContent = valor ? `${DAYS[parseDia(valor).getDay()]}, ${fmtDia(valor)}` : vacio;
   }
   s.later();
+  // «Restablecer» en iPhone vacía el campo pero deja el calendario abierto: quitarle el foco lo cierra
+  if (!valor && document.activeElement === input) setTimeout(() => input.blur(), 50);
 }
 const head = (title, sub = '', right = '') => `<div class="grab"></div><div class="shead"><button class="iconbtn" data-act="close">${I.close}</button><div><h3>${title}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div>${right}</div></div>`;
 

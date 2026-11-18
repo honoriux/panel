@@ -82,7 +82,7 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 ## Actualizar la app
 
-Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` y en `APP_VERSION` de `app/app.js` (los dos iguales; ahora va por `v6`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
+Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` y en `APP_VERSION` de `app/app.js` (los dos iguales; ahora va por `v7`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
 
 Para saber qué versión tienes: ⚙️ **Configuración → Acerca de**. Si ya hay una más nueva publicada, lo dice en rojo; cierra la app del todo (en el iPhone, desliza hacia arriba desde el selector de apps) y vuelve a abrirla.
 
