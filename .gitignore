@@ -1,0 +1,15 @@
+# La app es pública en GitHub Pages: aquí nunca van datos ni tokens.
+# Los datos viven solo en el repo privado panel-data.
+
+# Datos y exportaciones
+datos/
+*.csv
+datos.json
+copias/
+
+# Tokens y secretos
+.env
+*.token
+
+# Ajustes locales de Claude
+.claude/settings.local.json
