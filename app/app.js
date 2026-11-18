@@ -3,8 +3,11 @@
    Hermana de SaveyCustom: misma estructura, mismas piezas (hojas, toast, tema, seguimiento de cambios).
    Los datos viven en el dispositivo (localStorage); la sincronización con GitHub llega en la fase 3. */
 
-// Versión de la app: tiene que coincidir siempre con CACHE de sw.js (se suben las dos juntas en cada publicación)
-const APP_VERSION = 'panel-v7';
+// Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
+// Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
+const APP_VERSION = 'panel-2026-11-19.1';
+// '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
+const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
 const $ = (s, r = document) => r.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -485,11 +488,15 @@ function openAusForm(existing, preset = {}) {
       estado: (t, s) => { f.estado = t.value; s.refresh(); },
       'año': (t, s) => { f['año'] = +t.value; s.refresh(); },
       // «Hasta» no se rellena solo: si se guarda vacío, es un único día. Si queda antes de «Desde», se vacía.
+      // Restablecer cualquiera de los dos los vacía ambos.
       desde: (t, s) => {
         f.desde = t.value; fechaEnSitio(t, s);
-        if (f.hasta && f.desde && f.hasta < f.desde) { f.hasta = ''; const h = s.el.querySelector('[data-on=hasta]'); if (h) fechaEnSitio(h, s, ''); }
+        if (f.hasta && (!f.desde || f.hasta < f.desde)) { f.hasta = ''; const h = s.el.querySelector('[data-on=hasta]'); if (h) fechaEnSitio(h, s, ''); }
       },
-      hasta: (t, s) => { f.hasta = t.value; fechaEnSitio(t, s); },
+      hasta: (t, s) => {
+        f.hasta = t.value; fechaEnSitio(t, s);
+        if (!f.hasta && f.desde) { f.desde = ''; const d = s.el.querySelector('[data-on=desde]'); if (d) fechaEnSitio(d, s, ''); }
+      },
       save: (t, s) => {
         if (fest && !f.nombre.trim()) return toast('Pon el nombre del festivo');
         if (!f.desde) return toast('Elige la fecha');
@@ -715,7 +722,7 @@ function openSettings() {
       <button class="set-row" data-act="reset"><span class="ic">⟲</span><span class="t">Restablecer datos</span>›</button>
       <div class="set-h">Acerca de</div>
       <div class="set-row"><span class="ic">ⓘ</span><span class="t">Versión de la app<div class="small">${nuevaVersion === null ? 'Comprobando si hay una más nueva…' : nuevaVersion && nuevaVersion !== APP_VERSION
-        ? `<span class="red">Hay una versión nueva (${esc(nuevaVersion.replace('panel-', ''))}). Cierra la app del todo y vuelve a abrirla.</span>` : nuevaVersion ? 'Es la última publicada' : 'Sin conexión: no se puede comprobar'}</div></span><span class="v">${APP_VERSION.replace('panel-', '')}</span></div>
+        ? `<span class="red">Hay una versión nueva (${esc(fmtVersion(nuevaVersion))}). Cierra la app del todo y vuelve a abrirla.</span>` : nuevaVersion ? 'Es la última publicada' : 'Sin conexión: no se puede comprobar'}</div></span><span class="v">${fmtVersion(APP_VERSION)}</span></div>
 `,
     actions: {
       set: (t, s) => { st[t.dataset.k] = t.value; save(); s.refresh(); render(); },
