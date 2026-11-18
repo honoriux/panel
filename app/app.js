@@ -291,7 +291,7 @@ function openTareaForm(existing, preset = {}) {
     actions: {
       titulo: t => f.titulo = t.value, notas: t => f.notas = t.value, cada: t => cadaTxt = t.value,
       set: (t, s) => { f[t.dataset.k] = t.dataset.v; s.refresh(); },
-      fecha: (t, s) => { if (t.value) { f.fecha = t.value; s.refresh(); } },
+      fecha: (t, s) => { if (t.value) { f.fecha = t.value; fechaEnSitio(t, s); } },
       sinFecha: (t, s) => { f.fecha = null; f.repite = null; f.avisoDias = null; s.refresh(); },
       unidad: (t, s) => { f.repite = t.value ? { cada: parseInt(cadaTxt, 10) || 1, unidad: t.value } : null; s.refresh(); },
       aviso: (t, s) => { f.avisoDias = t.value === '' ? null : +t.value; s.refresh(); },
@@ -476,8 +476,12 @@ function openAusForm(existing, preset = {}) {
       tipo: (t, s) => { f.tipo = t.value; s.refresh(); },
       estado: (t, s) => { f.estado = t.value; s.refresh(); },
       'año': (t, s) => { f['año'] = +t.value; s.refresh(); },
-      desde: (t, s) => { if (!t.value) return; f.desde = t.value; if (!f.hasta || f.hasta < f.desde) f.hasta = f.desde; s.refresh(); },
-      hasta: (t, s) => { if (t.value) { f.hasta = t.value; s.refresh(); } },
+      desde: (t, s) => {
+        if (!t.value) return;
+        f.desde = t.value; fechaEnSitio(t, s);
+        if (!f.hasta || f.hasta < f.desde) { f.hasta = f.desde; const h = s.el.querySelector('[data-on=hasta]'); if (h) fechaEnSitio(h, s, f.hasta); }
+      },
+      hasta: (t, s) => { if (t.value) { f.hasta = t.value; fechaEnSitio(t, s); } },
       save: (t, s) => {
         if (fest && !f.nombre.trim()) return toast('Pon el nombre del festivo');
         if (!f.desde) return toast('Elige la fecha');
@@ -607,6 +611,21 @@ function openSheet({ render, actions = {}, cls = '', onRender }) {
   s.el.addEventListener('click', handle);
   s.el.addEventListener('change', handle);
   s.el.addEventListener('input', ev => { const t = ev.target.closest('[data-input]'); if (t) s.actions[t.dataset.input]?.(t, s, ev); });
+  /* Redibujado diferido. En iPhone, al abrir el selector de un campo de fecha vacío Safari pone ya la fecha de hoy
+     (y lanza "change"): si la hoja se redibujase en ese momento, el selector se cerraría solo. s.later() deja el
+     redibujado para cuando el campo pierde el foco y no se está tocando la hoja (para no perder el toque en Guardar). */
+  s.needsRefresh = false; s.pointer = false;
+  const tryRefresh = () => setTimeout(() => {
+    const a = document.activeElement;
+    if (!s.needsRefresh || s.pointer || (a && s.el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+    s.needsRefresh = false; if (sheets.includes(s)) s.refresh();
+  }, 60);
+  s.later = () => { s.needsRefresh = true; };
+  s.el.addEventListener('focusout', tryRefresh);
+  s.el.addEventListener('pointerdown', () => { s.pointer = true; });
+  s.el.addEventListener('click', () => { s.pointer = false; tryRefresh(); });
+  s.onUp = () => { if (s.pointer) setTimeout(() => { s.pointer = false; tryRefresh(); }, 300); };
+  window.addEventListener('pointerup', s.onUp);
   sheets.push(s);
   s.refresh();
   requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add('open')));
@@ -615,8 +634,16 @@ function openSheet({ render, actions = {}, cls = '', onRender }) {
 function closeSheet(s = sheets[sheets.length - 1]) {
   if (!s) return;
   sheets.splice(sheets.indexOf(s), 1);
+  if (s.onUp) window.removeEventListener('pointerup', s.onUp);
   s.wrap.classList.remove('open');
   setTimeout(() => s.wrap.remove(), 280);
+}
+// Cambio en un campo de fecha de una hoja: actualiza solo el texto visible de su fila y deja el resto para después
+function fechaEnSitio(input, s, valor = input.value) {
+  if (input.value !== valor) input.value = valor;
+  const v = input.closest('.frow')?.querySelector('.v');
+  if (v && valor) { v.classList.remove('ph'); v.textContent = `${DAYS[parseDia(valor).getDay()]}, ${fmtDia(valor)}`; }
+  s.later();
 }
 const head = (title, sub = '', right = '') => `<div class="grab"></div><div class="shead"><button class="iconbtn" data-act="close">${I.close}</button><div><h3>${title}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div>${right}</div></div>`;
 

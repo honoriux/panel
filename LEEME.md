@@ -82,7 +82,7 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 ## Actualizar la app
 
-Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` (ahora va por `v3`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
+Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` (ahora va por `v4`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
 
 Para regenerar los iconos: `python tools/generar_iconos.py`.
 
