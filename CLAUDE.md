@@ -1,6 +1,6 @@
 # Panel — proyecto
 
-PWA personal de Álvaro para tener centralizado lo pendiente (tareas, renovaciones y lo que caduca), el trabajo (pendientes, vacaciones y festivos) y los gastos (Savey). No es un panel para mirar a diario, salvo los gastos: se consulta cuando hace falta y avisa cuando algo se acerca.
+PWA personal de Álvaro para tener centralizadas las tareas (también las periódicas: renovaciones y lo que caduca), el trabajo (pendientes, vacaciones y festivos) y los gastos (Savey). No es un panel para mirar a diario, salvo los gastos: se consulta cuando hace falta y avisa cuando algo se acerca.
 
 Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey ios app`): misma arquitectura, mismo estilo de código, mismo sistema de sincronización. Antes de escribir código, lee `app.js` de Savey y reutiliza sus piezas (sync con GitHub, merge por registro, service worker, hojas/sheets, toasts) en lugar de reinventarlas. En la fase 6, Savey se integra dentro de Panel.
 
@@ -34,8 +34,8 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
 - Fechas en `AAAA-MM-DD` (día local, sin hora, para evitar desfases UTC). Importes en céntimos, como en Savey.
 
 ## Secciones
-1. **Inicio**: pendientes vencidos, de hoy, de esta semana, los que ya están dentro de su `avisoDias` y los que no tienen fecha; días libres que quedan del año.
-2. **Pendientes**: tareas y renovaciones juntas, con filtro (todas, personal, trabajo, periódicas), fecha opcional, prioridad, repetición, aviso y completadas plegadas.
+1. **Inicio**: tareas vencidas, de hoy, de esta semana, las que ya están dentro de su `avisoDias` y las que no tienen fecha; días libres que quedan del año.
+2. **Tareas** (en la interfaz siempre «tarea», nunca «pendiente»): todas juntas, también las periódicas (renovaciones), con filtro (todas, personal, trabajo, periódicas), fecha opcional, prioridad, repetición, aviso y completadas plegadas.
 3. **Trabajo**: tareas de ámbito trabajo, calendario laboral (lista, mes y año) y una **bolsa única de días libres por año**. Solo datos genéricos: nada confidencial de clientes.
    - Total del año = `vacacionesTotales` (22 de vacaciones + 2 de libre disposición = 24) + los festivos locales y autonómicos de **Sevilla** de ese año que caen entre semana y no son fiesta nacional. Para Álvaro no son festivos, sino días libres más que se piden como cualquier otro: en el calendario no se distinguen.
    - Cada ausencia que descuenta (`vacaciones`, `asuntos_propios`) lleva `año`: el año de días al que cuenta, que puede no ser el de su fecha. `otro` no descuenta. Los festivos (`festivo_*`) son solo referencia: suman al total de su año y su `estado` no se usa.

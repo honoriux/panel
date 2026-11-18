@@ -65,8 +65,8 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 ## Qué hace (por ahora)
 
-- **Inicio**: lo pendiente que está vencido, es de hoy o de esta semana, lo que ya ha entrado en su aviso (en rojo) y lo que no tiene fecha. Debajo, los días libres que te quedan este año (y los del anterior, si aún te quedan).
-- **Pendientes**: tareas y renovaciones juntas (lo que antes eran Tareas y Caducidades). Cada una puede tener fecha, prioridad, ámbito (personal o trabajo), icono y notas, y si tiene fecha:
+- **Inicio**: las tareas vencidas, las de hoy o de esta semana, las que ya han entrado en su aviso (en rojo) y las que no tienen fecha. Debajo, los días libres que te quedan este año (y los del anterior, si aún te quedan).
+- **Tareas**: todas juntas, también las periódicas como renovaciones y caducidades (antes estaban en una pestaña aparte). Cada una puede tener fecha, prioridad, ámbito (personal o trabajo), icono y notas, y si tiene fecha:
   - **Se repite** cada N días, semanas, meses o años: al marcarla como hecha se crea sola la siguiente (si ibas con retraso, la primera fecha que aún no ha pasado). Sirve para la ITV, el DNI o los seguros, y también para recibos o tareas periódicas.
   - **Avisar** con N días de antelación: desde entonces aparece en Inicio y con la etiqueta en rojo. Sin aviso, aparece la semana que toca.
   - Filtros: todas, personal, trabajo y «periódicas». Toca el círculo para completarla; las completadas quedan plegadas.
@@ -78,7 +78,7 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
   - **No laborables**: las fiestas nacionales y los días de empresa del año, plegados, solo para consultar.
   - **Calendario** (selector Lista / Mes / Año): el calendario laboral con colores. Gris para el fin de semana, rojo para las fiestas nacionales y los días de empresa, verde para lo aprobado o disfrutado, amarillo para lo pedido y sin aprobar, y azul con borde discontinuo para lo planificado sin pedir. Hoy va marcado con un círculo. Toca un día para ver qué es y pedirlo; en la vista anual, toca un mes para abrirlo.
 - **Gastos**: resumen del mes de SaveyCustom, solo lectura (ver el apartado 4).
-- **Botón +**: en Inicio y Pendientes añade un pendiente; en Trabajo te pregunta qué.
+- **Botón +**: en Inicio y Tareas crea una tarea; en Trabajo te pregunta qué.
 
 ## Actualizar la app
 
