@@ -3,6 +3,8 @@
    Hermana de SaveyCustom: misma estructura, mismas piezas (hojas, toast, tema, seguimiento de cambios).
    Los datos viven en el dispositivo (localStorage); la sincronización con GitHub llega en la fase 3. */
 
+// Versión de la app: tiene que coincidir siempre con CACHE de sw.js (se suben las dos juntas en cada publicación)
+const APP_VERSION = 'panel-v5';
 const KEY = 'panel.db.v1';
 const $ = (s, r = document) => r.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -291,7 +293,11 @@ function openTareaForm(existing, preset = {}) {
     actions: {
       titulo: t => f.titulo = t.value, notas: t => f.notas = t.value, cada: t => cadaTxt = t.value,
       set: (t, s) => { f[t.dataset.k] = t.dataset.v; s.refresh(); },
-      fecha: (t, s) => { if (t.value) { f.fecha = t.value; fechaEnSitio(t, s); } },
+      fecha: (t, s) => {
+        f.fecha = t.value || null;
+        if (!f.fecha) { f.repite = null; f.avisoDias = null; } // sin fecha no hay repetición ni aviso
+        fechaEnSitio(t, s, t.value, 'Sin fecha ›');
+      },
       sinFecha: (t, s) => { f.fecha = null; f.repite = null; f.avisoDias = null; s.refresh(); },
       unidad: (t, s) => { f.repite = t.value ? { cada: parseInt(cadaTxt, 10) || 1, unidad: t.value } : null; s.refresh(); },
       aviso: (t, s) => { f.avisoDias = t.value === '' ? null : +t.value; s.refresh(); },
@@ -316,7 +322,8 @@ function openTareaForm(existing, preset = {}) {
         save(); s.close(); render(); toast('Eliminado');
       },
     },
-    onRender: s => { if (!isEdit && !f.titulo) setTimeout(() => s.el.querySelector('[data-input=titulo]')?.focus(), 300); },
+    // Cursor en «Qué» solo al abrir un pendiente nuevo (no en cada redibujado: en iPhone sacaría el teclado una y otra vez)
+    onRender: s => { if (!isEdit && !s.enfocado) { s.enfocado = true; setTimeout(() => s.el.querySelector('[data-input=titulo]')?.focus(), 300); } },
   });
 }
 
@@ -459,14 +466,15 @@ function openAusForm(existing, preset = {}) {
   openSheet({
     cls: 'full',
     render: () => {
-      const t = TIPOS_AUS[f.tipo], n = diasLaborables(f.desde, f.hasta);
+      const t = TIPOS_AUS[f.tipo], n = diasLaborables(f.desde, f.hasta || f.desde);
       const años = [...new Set([y0 - 1, y0, y0 + 1, f['año']])].sort();
       return `${head(isEdit ? 'Editar' : fest ? 'Nuevo festivo' : 'Pedir días')}
       <div class="frow"><span>Tipo</span><span class="v">${ico(t)} ${t.n} ›</span><select class="overlay" data-on="tipo">${tipos.map(([k, v]) => `<option value="${k}" ${k === f.tipo ? 'selected' : ''}>${v.icon} ${v.n}</option>`).join('')}</select></div>
       <div class="field"><label>Nombre${fest ? '' : ' (opcional)'}</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="${fest ? 'Ej. Miércoles de Feria' : 'Ej. Navidad en casa'}"></div>
       ${dateRow('desde', fest ? 'Fecha' : 'Desde')}
       ${fest ? '' : dateRow('hasta', 'Hasta')}
-      ${fest ? '' : `${f.desde && f.hasta ? `<div class="small" style="padding:8px 0">${f.hasta < f.desde ? '<span class="red">La fecha final es anterior a la inicial.</span>' : `${plural(n, 'día laborable', 'días laborables')} (sin fines de semana, fiestas nacionales ni 24 y 31 de diciembre).`}</div>` : ''}
+      ${fest ? '' : `${f.desde ? `<div class="small" style="padding:8px 0">${f.hasta && f.hasta < f.desde ? '<span class="red">La fecha final es anterior a la inicial.</span>'
+        : `${f.hasta ? '' : 'Sin «Hasta», será solo ese día: '}${plural(n, 'día laborable', 'días laborables')} (sin fines de semana, fiestas nacionales ni 24 y 31 de diciembre).`}</div>` : ''}
         <div class="frow"><span>Cuenta para</span><span class="v">Días de ${f['año']} ›</span><select class="overlay" data-on="año">${años.map(a => `<option value="${a}" ${a === f['año'] ? 'selected' : ''}>Días de ${a}</option>`).join('')}</select></div>
         <div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
       <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`;
@@ -476,12 +484,12 @@ function openAusForm(existing, preset = {}) {
       tipo: (t, s) => { f.tipo = t.value; s.refresh(); },
       estado: (t, s) => { f.estado = t.value; s.refresh(); },
       'año': (t, s) => { f['año'] = +t.value; s.refresh(); },
+      // «Hasta» no se rellena solo: si se guarda vacío, es un único día. Si queda antes de «Desde», se vacía.
       desde: (t, s) => {
-        if (!t.value) return;
         f.desde = t.value; fechaEnSitio(t, s);
-        if (!f.hasta || f.hasta < f.desde) { f.hasta = f.desde; const h = s.el.querySelector('[data-on=hasta]'); if (h) fechaEnSitio(h, s, f.hasta); }
+        if (f.hasta && f.desde && f.hasta < f.desde) { f.hasta = ''; const h = s.el.querySelector('[data-on=hasta]'); if (h) fechaEnSitio(h, s, ''); }
       },
-      hasta: (t, s) => { if (t.value) { f.hasta = t.value; fechaEnSitio(t, s); } },
+      hasta: (t, s) => { f.hasta = t.value; fechaEnSitio(t, s); },
       save: (t, s) => {
         if (fest && !f.nombre.trim()) return toast('Pon el nombre del festivo');
         if (!f.desde) return toast('Elige la fecha');
@@ -534,13 +542,19 @@ function infoDia(f) {
   else if (pedidos.length) cls = CLASE_ESTADO[estadoReal(pedidos[0])] || 'ok';
   return { f, d, finde, nl, pedidos, cls };
 }
+// En la vista mensual, los huecos de la primera y la última semana se rellenan con los días del mes anterior
+// y del siguiente, en tono apagado (como el calendario de Windows). En la anual se dejan en blanco.
 function gridMes(y, m, mini = false) {
   const first = new Date(y, m, 1), pad = (first.getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate(), h = hoy();
-  let cells = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(x => `<div class="h">${x}</div>`).join('') + '<div></div>'.repeat(pad);
-  for (let i = 1; i <= n; i++) {
-    const info = infoDia(dayKey(new Date(y, m, i)));
-    cells += `<${mini ? 'div' : 'button'} class="d ${info.cls} ${info.f === h ? 'hoy' : ''}" ${mini ? '' : `data-act="dia" data-f="${info.f}"`}>${i}</${mini ? 'div' : 'button'}>`;
-  }
+  const resto = (7 - (pad + n) % 7) % 7;
+  const celda = (d, otro) => {
+    const info = infoDia(dayKey(d));
+    return `<${mini ? 'div' : 'button'} class="d ${info.cls} ${info.f === h ? 'hoy' : ''} ${otro ? 'otro' : ''}" ${mini ? '' : `data-act="dia" data-f="${info.f}"`}>${d.getDate()}</${mini ? 'div' : 'button'}>`;
+  };
+  let cells = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(x => `<div class="h">${x}</div>`).join('');
+  for (let i = pad; i > 0; i--) cells += mini ? '<div></div>' : celda(new Date(y, m, 1 - i), true);
+  for (let i = 1; i <= n; i++) cells += celda(new Date(y, m, i), false);
+  for (let i = 1; i <= resto; i++) cells += mini ? '' : celda(new Date(y, m + 1, i), true);
   return `<div class="cal ${mini ? 'mini' : ''}">${cells}</div>`;
 }
 const leyenda = () => `<div class="leyenda">${LEYENDA.map(([c, l]) => `<span><i class="d ${c}"></i>${l}</span>`).join('')}<span><i class="d hoy"></i>Hoy</span></div>`;
@@ -639,10 +653,14 @@ function closeSheet(s = sheets[sheets.length - 1]) {
   setTimeout(() => s.wrap.remove(), 280);
 }
 // Cambio en un campo de fecha de una hoja: actualiza solo el texto visible de su fila y deja el resto para después
-function fechaEnSitio(input, s, valor = input.value) {
+// Si el valor queda vacío (botón «Restablecer» del selector), muestra el texto de campo vacío.
+function fechaEnSitio(input, s, valor = input.value, vacio = 'Seleccionar ›') {
   if (input.value !== valor) input.value = valor;
   const v = input.closest('.frow')?.querySelector('.v');
-  if (v && valor) { v.classList.remove('ph'); v.textContent = `${DAYS[parseDia(valor).getDay()]}, ${fmtDia(valor)}`; }
+  if (v) {
+    v.classList.toggle('ph', !valor);
+    v.textContent = valor ? `${DAYS[parseDia(valor).getDay()]}, ${fmtDia(valor)}` : vacio;
+  }
   s.later();
 }
 const head = (title, sub = '', right = '') => `<div class="grab"></div><div class="shead"><button class="iconbtn" data-act="close">${I.close}</button><div><h3>${title}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div>${right}</div></div>`;
@@ -655,8 +673,25 @@ function pickList(title, items, current, onPick) {
 }
 
 /* ---------------- Configuración ---------------- */
+// Qué hay guardado, en palabras
+function resumenDatos() {
+  const pend = db.tareas.filter(t => t.estado !== 'hecha').length, hechas = db.tareas.length - pend;
+  const pedidos = db.trabajo.ausencias.filter(a => !esFestivo(a)).length, fest = db.trabajo.ausencias.length - pedidos;
+  return `Tienes ${plural(pend, 'pendiente', 'pendientes')} y ${plural(hechas, 'completado', 'completados')}. En Trabajo, ${plural(pedidos, 'petición de días', 'peticiones de días')} y ${plural(fest, 'festivo de Sevilla', 'festivos de Sevilla')}.`;
+}
+// Versión publicada en la web (null mientras se comprueba, '' si no se puede). "?fresh" hace que el service worker no la sirva de caché.
+let nuevaVersion = null;
+async function comprobarVersion() {
+  try {
+    navigator.serviceWorker?.getRegistration().then(r => r?.update()).catch(() => { }); // que descargue ya la nueva si la hay
+    const txt = await (await fetch('sw.js?fresh=1', { cache: 'no-store' })).text();
+    nuevaVersion = txt.match(/const CACHE = '([^']+)'/)?.[1] || '';
+  } catch (e) { nuevaVersion = ''; }
+}
 function openSettings() {
   const st = db.settings;
+  nuevaVersion = null;
+  comprobarVersion().then(() => sheets.forEach(x => x.live && x.refresh()));
   const sel = (key, opts) => `<select data-on="set" data-k="${key}">${Object.entries(opts).map(([k, l]) => `<option value="${k}" ${st[key] === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   openSheet({
     cls: 'full',
@@ -672,7 +707,10 @@ function openSettings() {
       <button class="set-row" data-act="backup"><span class="ic">☁︎</span><span class="t">Copia de seguridad<div class="small">${st.lastBackup ? 'Última: ' + longDate(new Date(st.lastBackup)) : 'Nunca'}</div></span>›</button>
       <button class="set-row" data-act="restore"><span class="ic">⤓</span><span class="t">Restaurar copia de seguridad</span>›</button>
       <button class="set-row" data-act="reset"><span class="ic">⟲</span><span class="t">Restablecer datos</span>›</button>
-      <p class="small" style="margin-top:18px">${db.tareas.filter(t => t.estado !== 'hecha').length} pendientes (${db.tareas.length} en total) · ${db.trabajo.ausencias.length} días pedidos y festivos.<br>
+      <div class="set-h">Acerca de</div>
+      <div class="set-row"><span class="ic">ⓘ</span><span class="t">Versión de la app<div class="small">${nuevaVersion === null ? 'Comprobando si hay una más nueva…' : nuevaVersion && nuevaVersion !== APP_VERSION
+        ? `<span class="red">Hay una versión nueva (${esc(nuevaVersion.replace('panel-', ''))}). Cierra la app del todo y vuelve a abrirla.</span>` : nuevaVersion ? 'Es la última publicada' : 'Sin conexión: no se puede comprobar'}</div></span><span class="v">${APP_VERSION.replace('panel-', '')}</span></div>
+      <p class="small" style="margin-top:18px">${resumenDatos()}<br>
       ${sync?.token ? 'Los datos se guardan en este dispositivo y en tu repositorio privado de GitHub, con su historial.' : 'Los datos se guardan solo en este dispositivo. Haz copias de seguridad de vez en cuando y guárdalas en iCloud Drive, o activa la sincronización con GitHub.'}</p>`,
     actions: {
       set: (t, s) => { st[t.dataset.k] = t.value; save(); s.refresh(); render(); },

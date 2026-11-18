@@ -113,6 +113,7 @@ h2.sec { font-family: var(--serif); font-weight: 400; font-size: 21px; margin: 1
 .d.pend, .cal .d.pend { background: var(--c-pend); border-color: transparent; color: #2a2f3a; }
 .d.plan, .cal .d.plan { background: var(--c-plan-bg); border: 2px dashed var(--c-plan); color: var(--text); }
 .cal.mini .d.plan { border-width: 1px; }
+.cal .d.otro { opacity: .35; }
 .d.hoy::after { content: ""; position: absolute; inset: 3px; border: 2px solid var(--text); border-radius: 50%; pointer-events: none; }
 .cal.mini .d.hoy::after { inset: -1px; border-width: 1.5px; }
 .year { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; align-items: start; }

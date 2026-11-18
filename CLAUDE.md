@@ -59,7 +59,8 @@ La PWA no puede avisar en segundo plano. Habrá una GitHub Action diaria en `pan
 - Prueba en el navegador en ancho móvil y escritorio antes de dar algo por bueno. Antes de probar en `localhost`, guarda una copia de su `localStorage` y restáurala al terminar.
 - La app solo envía datos a la API de GitHub. La única excepción es la Action de avisos (fase 5) con CallMeBot.
 - `.gitignore`: nada de datos ni tokens en el repo de la app. La app es pública en Pages y los datos solo viven en los repos privados.
-- Sube `CACHE` en `sw.js` en cada cambio publicado.
+- Sube `CACHE` en `sw.js` y `APP_VERSION` en `app.js` (siempre iguales, `panel-vN`) en cada cambio publicado. La versión se ve en Configuración → Acerca de.
+- En iPhone, nunca redibujar una hoja mientras un campo de fecha tiene el foco (Safari pone hoy al abrir el selector y lo cierra): usar `fechaEnSitio` + `s.later()`.
 
 ## Fases
 1. ✅ Esqueleto PWA + Caducidades + Inicio.

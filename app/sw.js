@@ -1,6 +1,7 @@
 // Service worker: permite usar la app sin conexión.
 // Sirve desde caché y actualiza en segundo plano (los cambios se ven al siguiente arranque).
-const CACHE = 'panel-v4';
+// CACHE tiene que coincidir con APP_VERSION de app.js: se suben las dos juntas en cada publicación.
+const CACHE = 'panel-v5';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -10,7 +11,9 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (url.searchParams.has('fresh')) return; // la app pregunta por la última versión publicada: siempre a la red
   e.respondWith(caches.open(CACHE).then(async cache => {
     const cached = await cache.match(e.request, { ignoreSearch: true });
     const network = fetch(e.request).then(res => { if (res.ok) cache.put(e.request, res.clone()); return res; }).catch(() => cached);
