@@ -4,7 +4,7 @@
    Los datos viven en el dispositivo (localStorage); la sincronización con GitHub llega en la fase 3. */
 
 // Versión de la app: tiene que coincidir siempre con CACHE de sw.js (se suben las dos juntas en cada publicación)
-const APP_VERSION = 'panel-v5';
+const APP_VERSION = 'panel-v6';
 const KEY = 'panel.db.v1';
 const $ = (s, r = document) => r.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -277,7 +277,7 @@ function openTareaForm(existing, preset = {}) {
       return `${head(isEdit ? 'Editar' : 'Nuevo pendiente')}
       <div class="field"><label>Qué</label><input data-input="titulo" value="${esc(f.titulo)}" placeholder="Ej. Llamar al banco o renovar la ITV"></div>
       <div class="field"><label>Ámbito</label>${seg('ambito', AMBITOS)}</div>
-      <div class="frow"><span>Fecha</span><span class="v ${f.fecha ? '' : 'ph'}">${f.fecha ? `${fmtDia(f.fecha)} <span class="muted">· ${textoDias(diasHasta(f.fecha))}</span>` : 'Sin fecha ›'}</span><input type="date" value="${f.fecha || ''}" data-on="fecha"></div>
+      <div class="frow"><span>Fecha</span><span class="v ${f.fecha ? '' : 'ph'}">${f.fecha ? `${fmtDia(f.fecha)} <span class="muted">· ${textoDias(diasHasta(f.fecha))}</span>` : 'Sin fecha ›'}</span><input type="date" data-valor="${f.fecha || ''}" data-on="fecha"></div>
       ${f.fecha ? `<button class="link" data-act="sinFecha">Quitar fecha</button>
         <div class="frow"><span>Se repite</span><span class="v">${f.repite ? textoRepite(f.repite) : 'No'} ›</span><select class="overlay" data-on="unidad">${opt('', 'No se repite', f.repite?.unidad)}${Object.entries(UNIDADES).map(([k, [, pl]]) => opt(k, 'Cada X ' + pl, f.repite?.unidad)).join('')}</select></div>
         ${f.repite ? `<div class="field"><label>Cada cuántos ${UNIDADES[f.repite.unidad][1]}</label><input data-input="cada" inputmode="numeric" value="${esc(cadaTxt)}"></div>` : ''}
@@ -462,7 +462,7 @@ function openAusForm(existing, preset = {}) {
   const f = existing ? { ...existing, 'año': añoDe(existing) } : { tipo: 'vacaciones', nombre: '', desde: '', hasta: '', estado: 'por_pedir', 'año': y0, ...preset };
   const fest = esFestivo(f);
   const tipos = Object.entries(TIPOS_AUS).filter(([k]) => fest ? k.startsWith('festivo') : !k.startsWith('festivo'));
-  const dateRow = (k, label) => `<div class="frow"><span>${label}</span><span class="v ${f[k] ? '' : 'ph'}">${f[k] ? `${DAYS[parseDia(f[k]).getDay()]}, ${fmtDia(f[k])}` : 'Seleccionar ›'}</span><input type="date" value="${f[k]}" data-on="${k}"></div>`;
+  const dateRow = (k, label) => `<div class="frow"><span>${label}</span><span class="v ${f[k] ? '' : 'ph'}">${f[k] ? `${DAYS[parseDia(f[k]).getDay()]}, ${fmtDia(f[k])}` : 'Seleccionar ›'}</span><input type="date" data-valor="${f[k] || ''}" data-on="${k}"></div>`;
   openSheet({
     cls: 'full',
     render: () => {
@@ -612,7 +612,13 @@ function openSheet({ render, actions = {}, cls = '', onRender }) {
   wrap.innerHTML = `<div class="backdrop"></div><div class="sheet ${cls}"></div>`;
   document.body.appendChild(wrap);
   const s = { wrap, el: wrap.querySelector('.sheet'), actions, render, onRender, live: cls === 'full' };
-  s.refresh = () => { const st = s.el.scrollTop; s.el.innerHTML = s.render(s); s.el.scrollTop = st; s.onRender?.(s); };
+  s.refresh = () => {
+    const st = s.el.scrollTop; s.el.innerHTML = s.render(s); s.el.scrollTop = st;
+    // Las fechas se ponen como propiedad y no como atributo value: así su valor «inicial» queda vacío y el botón
+    // «Restablecer» del selector del iPhone (que vuelve al valor inicial) deja el campo vacío de verdad.
+    s.el.querySelectorAll('input[type=date][data-valor]').forEach(i => { i.value = i.dataset.valor; });
+    s.onRender?.(s);
+  };
   s.close = () => closeSheet(s);
   wrap.querySelector('.backdrop').addEventListener('click', () => closeSheet(s));
   const handle = ev => {
@@ -624,7 +630,11 @@ function openSheet({ render, actions = {}, cls = '', onRender }) {
   };
   s.el.addEventListener('click', handle);
   s.el.addEventListener('change', handle);
-  s.el.addEventListener('input', ev => { const t = ev.target.closest('[data-input]'); if (t) s.actions[t.dataset.input]?.(t, s, ev); });
+  s.el.addEventListener('input', ev => {
+    const t = ev.target.closest('[data-input]'); if (t) return s.actions[t.dataset.input]?.(t, s, ev);
+    // Algunos selectores de fecha (como «Restablecer» en iPhone) solo avisan con "input": se trata igual que "change"
+    const d = ev.target.closest('input[type=date][data-on]'); if (d) s.actions[d.dataset.on]?.(d, s, ev);
+  });
   /* Redibujado diferido. En iPhone, al abrir el selector de un campo de fecha vacío Safari pone ya la fecha de hoy
      (y lanza "change"): si la hoja se redibujase en ese momento, el selector se cerraría solo. s.later() deja el
      redibujado para cuando el campo pierde el foco y no se está tocando la hoja (para no perder el toque en Guardar). */
@@ -673,12 +683,6 @@ function pickList(title, items, current, onPick) {
 }
 
 /* ---------------- Configuración ---------------- */
-// Qué hay guardado, en palabras
-function resumenDatos() {
-  const pend = db.tareas.filter(t => t.estado !== 'hecha').length, hechas = db.tareas.length - pend;
-  const pedidos = db.trabajo.ausencias.filter(a => !esFestivo(a)).length, fest = db.trabajo.ausencias.length - pedidos;
-  return `Tienes ${plural(pend, 'pendiente', 'pendientes')} y ${plural(hechas, 'completado', 'completados')}. En Trabajo, ${plural(pedidos, 'petición de días', 'peticiones de días')} y ${plural(fest, 'festivo de Sevilla', 'festivos de Sevilla')}.`;
-}
 // Versión publicada en la web (null mientras se comprueba, '' si no se puede). "?fresh" hace que el service worker no la sirva de caché.
 let nuevaVersion = null;
 async function comprobarVersion() {
@@ -704,14 +708,13 @@ function openSettings() {
         <button class="set-row" data-act="monthly"><span class="ic">🗓</span><span class="t">Copias mensuales en GitHub<div class="small">${sync.lastSnapshot ? 'Última: ' + esc(sync.lastSnapshot) : 'Se hará en la próxima sincronización'}</div></span>›</button>` : ''}
       <button class="set-row" data-act="gastosSetup"><span class="ic">€</span><span class="t">${gastosCfg?.token ? 'Gastos: ' + esc(gastosCfg.owner + '/' + gastosCfg.repo) : 'Conectar gastos de Savey'}<div class="small">${gastosCfg?.token ? 'Solo lectura' + (gastos ? ' · actualizado ' + haceTxt(gastos.actualizado) : '') : 'Desactivado'}</div></span>›</button>
       <div class="set-h">Datos</div>
-      <button class="set-row" data-act="backup"><span class="ic">☁︎</span><span class="t">Copia de seguridad<div class="small">${st.lastBackup ? 'Última: ' + longDate(new Date(st.lastBackup)) : 'Nunca'}</div></span>›</button>
+      <button class="set-row" data-act="backup"><span class="ic">☁︎</span><span class="t">Exportar copia de seguridad<div class="small">Descarga un archivo con todo${st.lastBackup ? ' · última: ' + longDate(new Date(st.lastBackup)) : ''}</div></span>›</button>
       <button class="set-row" data-act="restore"><span class="ic">⤓</span><span class="t">Restaurar copia de seguridad</span>›</button>
       <button class="set-row" data-act="reset"><span class="ic">⟲</span><span class="t">Restablecer datos</span>›</button>
       <div class="set-h">Acerca de</div>
       <div class="set-row"><span class="ic">ⓘ</span><span class="t">Versión de la app<div class="small">${nuevaVersion === null ? 'Comprobando si hay una más nueva…' : nuevaVersion && nuevaVersion !== APP_VERSION
         ? `<span class="red">Hay una versión nueva (${esc(nuevaVersion.replace('panel-', ''))}). Cierra la app del todo y vuelve a abrirla.</span>` : nuevaVersion ? 'Es la última publicada' : 'Sin conexión: no se puede comprobar'}</div></span><span class="v">${APP_VERSION.replace('panel-', '')}</span></div>
-      <p class="small" style="margin-top:18px">${resumenDatos()}<br>
-      ${sync?.token ? 'Los datos se guardan en este dispositivo y en tu repositorio privado de GitHub, con su historial.' : 'Los datos se guardan solo en este dispositivo. Haz copias de seguridad de vez en cuando y guárdalas en iCloud Drive, o activa la sincronización con GitHub.'}</p>`,
+`,
     actions: {
       set: (t, s) => { st[t.dataset.k] = t.value; save(); s.refresh(); render(); },
       syncSetup: () => openSyncSetup(),

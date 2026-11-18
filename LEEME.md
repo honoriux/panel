@@ -60,7 +60,7 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 ## 5. No perder los datos
 
 - Con la sincronización activada, GitHub ya guarda todo y su historial. Inicio solo te avisa si lleva más de una semana sin sincronizar.
-- Sin sincronización: ⚙️ **Configuración → Copia de seguridad** genera un `panel-AAAA-MM-DD.json` con todo. Guárdalo en iCloud Drive. Si hace más de un mes de la última, Inicio te lo recuerda. Para pasarlo a otro dispositivo: **Restaurar copia de seguridad**.
+- Cuando quieras una copia a mano (o sin sincronización): ⚙️ **Configuración → Exportar copia de seguridad** genera un `panel-AAAA-MM-DD.json` con todo. Guárdalo en iCloud Drive. Si hace más de un mes de la última, Inicio te lo recuerda. Para pasarlo a otro dispositivo: **Restaurar copia de seguridad**.
 - **No borres la app de la pantalla de inicio** sin tener los datos sincronizados o una copia: al borrarla se borran sus datos.
 
 ## Qué hace (por ahora)
@@ -82,7 +82,7 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 ## Actualizar la app
 
-Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` y en `APP_VERSION` de `app/app.js` (los dos iguales; ahora va por `v5`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
+Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` y en `APP_VERSION` de `app/app.js` (los dos iguales; ahora va por `v6`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
 
 Para saber qué versión tienes: ⚙️ **Configuración → Acerca de**. Si ya hay una más nueva publicada, lo dice en rojo; cierra la app del todo (en el iPhone, desliza hacia arriba desde el selector de apps) y vuelve a abrirla.
 
