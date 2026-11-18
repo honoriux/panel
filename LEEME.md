@@ -65,10 +65,11 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 ## Qué hace (por ahora)
 
-- **Inicio**: lo que vence en los próximos 60 días y lo ya vencido, ordenado por días restantes. En rojo lo que ya está dentro de su aviso.
-  Debajo, las tareas vencidas, de esta semana o sin fecha, y los días libres que te quedan este año (y los del anterior, si aún te quedan).
-- **Caducidades**: alta, edición y **Hecho / renovado**. Si se repite (cada año, cada 2 o cada N años), al marcarla se crea sola la siguiente fecha. Las hechas quedan plegadas al final.
-- **Tareas**: personales y de trabajo, con filtro, fecha opcional y prioridad. Se agrupan en vencidas, hoy, esta semana, más adelante y sin fecha. Toca el círculo para completarla; las completadas quedan plegadas.
+- **Inicio**: lo pendiente que está vencido, es de hoy o de esta semana, lo que ya ha entrado en su aviso (en rojo) y lo que no tiene fecha. Debajo, los días libres que te quedan este año (y los del anterior, si aún te quedan).
+- **Pendientes**: tareas y renovaciones juntas (lo que antes eran Tareas y Caducidades). Cada una puede tener fecha, prioridad, ámbito (personal o trabajo), icono y notas, y si tiene fecha:
+  - **Se repite** cada N días, semanas, meses o años: al marcarla como hecha se crea sola la siguiente (si ibas con retraso, la primera fecha que aún no ha pasado). Sirve para la ITV, el DNI o los seguros, y también para recibos o tareas periódicas.
+  - **Avisar** con N días de antelación: desde entonces aparece en Inicio y con la etiqueta en rojo. Sin aviso, aparece la semana que toca.
+  - Filtros: todas, personal, trabajo y «se repiten». Toca el círculo para completarla; las completadas quedan plegadas.
 - **Trabajo**:
   - Las tareas de trabajo pendientes.
   - **Días libres del año**: una sola bolsa con las vacaciones y la libre disposición (24 por defecto, se cambia en **Editar**) más los festivos de Sevilla de ese año. Muestra totales, disfrutados, pedidos y restantes, en días laborables: no cuentan fines de semana, fiestas nacionales ni el 24 y 31 de diciembre. Una petición aprobada cuenta sola como disfrutada cuando pasa su fecha.
@@ -77,11 +78,11 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
   - **No laborables**: las fiestas nacionales y los días de empresa del año, plegados, solo para consultar.
   - **Calendario** (selector Lista / Mes / Año): el calendario laboral con colores. Gris para el fin de semana, rojo para las fiestas nacionales y los días de empresa, verde para lo aprobado o disfrutado, amarillo para lo pedido y sin aprobar, y azul con borde discontinuo para lo planificado sin pedir. Hoy va marcado con un círculo. Toca un día para ver qué es y pedirlo; en la vista anual, toca un mes para abrirlo.
 - **Gastos**: resumen del mes de SaveyCustom, solo lectura (ver el apartado 4).
-- **Botón +**: añade lo que toca según la pestaña (en Inicio y Trabajo te pregunta qué).
+- **Botón +**: en Inicio y Pendientes añade un pendiente; en Trabajo te pregunta qué.
 
 ## Actualizar la app
 
-Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` (ahora va por `v2`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
+Si cambias algo en `app/`, sube en uno el número de `panel-vN` en `app/sw.js` (ahora va por `v3`) y sube los cambios. La app se actualiza sola la siguiente vez que la abras con conexión, normalmente tras cerrarla y abrirla dos veces. Los datos no se tocan.
 
 Para regenerar los iconos: `python tools/generar_iconos.py`.
 

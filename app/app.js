@@ -1,5 +1,5 @@
 'use strict';
-/* Panel — caducidades, tareas, trabajo y resumen de gastos.
+/* Panel — pendientes (tareas y renovaciones), trabajo y resumen de gastos.
    Hermana de SaveyCustom: misma estructura, mismas piezas (hojas, toast, tema, seguimiento de cambios).
    Los datos viven en el dispositivo (localStorage); la sincronización con GitHub llega en la fase 3. */
 
@@ -25,7 +25,7 @@ const SETTINGS_DEFAULT = defaultDB().settings;
 let db;
 function load() {
   try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { db = null; }
-  if (!db || !Array.isArray(db.caducidades)) db = defaultDB();
+  if (!db || !Array.isArray(db.tareas)) db = defaultDB();
   normalize();
   takeSnap();
 }
@@ -34,6 +34,9 @@ function normalize() {
   db.settings = Object.assign({}, SETTINGS_DEFAULT, db.settings || {});
   db.caducidades = db.caducidades || [];
   db.tareas = db.tareas || [];
+  // Tareas y caducidades están unificadas: las caducidades (de copias antiguas u otro dispositivo sin actualizar) pasan a tareas
+  migrarCaducidades(db);
+  for (const t of db.tareas) { if (t.repite === undefined) t.repite = null; if (t.avisoDias === undefined) t.avisoDias = null; if (t.tipo === undefined) t.tipo = null; }
   db.trabajo = Object.assign(d.trabajo, db.trabajo || {});
   db.trabajo.ausencias = db.trabajo.ausencias || [];
   // Los días pedidos cuentan para un año ("año"); si falta, el de su fecha de inicio
@@ -84,11 +87,6 @@ const parseDia = s => { const [y, m, d] = s.split('-').map(Number); return new D
 const fmtDia = s => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
 // Días enteros de hoy a la fecha (negativo si ya pasó). Math.round absorbe los cambios de hora.
 const diasHasta = s => Math.round((parseDia(s) - parseDia(hoy())) / 864e5);
-function sumarAños(s, n) {
-  const [y, m, d] = s.split('-').map(Number);
-  const last = new Date(y + n, m, 0).getDate(); // 29 de febrero -> 28 si el año no es bisiesto
-  return dayKey(new Date(y + n, m - 1, Math.min(d, last)));
-}
 function textoDias(n) {
   if (n === 0) return 'hoy';
   if (n === 1) return 'mañana';
@@ -132,7 +130,6 @@ const I = {
   })(),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   home: svg('<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h4.5v-5h3v5H18V9.5"/>'),
-  hourglass: svg('<path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 10 5 10 9s-10 4-10 9"/><path d="M17 3c0 5-10 5-10 9s10 4 10 9"/>'),
   check: svg('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>'),
   chart: svg('<path d="M3 17l5-6 4 3 6-8 3 3"/><path d="M3 21h18"/>'),
   briefcase: svg('<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/><path d="M3 12.5h18"/>'),
@@ -141,13 +138,12 @@ const I = {
 /* ---------------- Pestañas ----------------
    "fab" es lo que hace el botón + en esa pestaña (Gastos no tiene: es solo lectura). */
 const TABS = [
-  { k: 'home', label: 'Inicio', icon: I.home, title: 'Panel', view: viewHome, fab: () => pickList('Añadir', [['cad', '⏳ Caducidad'], ['tarea', '☑️ Tarea']], null, v => v === 'cad' ? openCadForm(null) : openTareaForm(null)) },
-  { k: 'cad', label: 'Caducidades', icon: I.hourglass, title: 'Caducidades', view: viewCaducidades, fab: () => openCadForm(null) },
-  { k: 'tareas', label: 'Tareas', icon: I.check, title: 'Tareas', view: viewTareas, fab: () => openTareaForm(null, { ambito: ui.filtroTareas === 'trabajo' ? 'trabajo' : 'personal' }) },
+  { k: 'home', label: 'Inicio', icon: I.home, title: 'Panel', view: viewHome, fab: () => openTareaForm(null) },
+  { k: 'tareas', label: 'Pendientes', icon: I.check, title: 'Pendientes', view: viewTareas, fab: () => openTareaForm(null, { ambito: ui.filtroTareas === 'trabajo' ? 'trabajo' : 'personal' }) },
   { k: 'trabajo', label: 'Trabajo', icon: I.briefcase, title: 'Trabajo', view: viewTrabajo, fab: () => pickList('Añadir', [['tarea', '☑️ Tarea de trabajo'], ['aus', '🏖️ Pedir días'], ['fest', '🏛️ Festivo']], null, v => v === 'tarea' ? openTareaForm(null, { ambito: 'trabajo' }) : v === 'aus' ? openAusForm(null) : openAusForm(null, { tipo: 'festivo_local' })) },
   { k: 'gastos', label: 'Gastos', icon: I.chart, title: 'Gastos', view: viewGastos, fab: null },
 ];
-const tabOf = k => TABS.find(t => t.k === k) || TABS[0];
+const tabOf = k => TABS.find(t => t.k === (k === 'cad' ? 'tareas' : k)) || TABS[0]; // 'cad' era la antigua pestaña Caducidades
 
 /* ---------------- Render principal ---------------- */
 function render() {
@@ -161,7 +157,11 @@ function render() {
   sheets.forEach(s => s.live && s.refresh());
 }
 
-/* ---------------- Caducidades ---------------- */
+/* ---------------- Pendientes: tareas y renovaciones unificadas ----------------
+   Una caducidad es una tarea con fecha, aviso y repetición. Todo vive en db.tareas:
+   - repite: null o { cada: N, unidad: 'dias' | 'semanas' | 'meses' | 'años' } (necesita fecha)
+   - avisoDias: días de antelación con que aparece en Inicio (null = solo cuando llega su semana)
+   - tipo: icono opcional (vehículo, documento, seguro…) */
 const TIPOS = {
   vehiculo: { n: 'Vehículo', icon: '🚗', color: '#43b5c9' },
   documento: { n: 'Documento', icon: '🪪', color: '#8e6ce0' },
@@ -171,192 +171,149 @@ const TIPOS = {
   suscripcion: { n: 'Suscripción', icon: '📺', color: '#7c84e8' },
   otro: { n: 'Otro', icon: '📄', color: '#7a7f8c' },
 };
-const REPITE = { nunca: 'No se repite', anual: 'Cada año', bienal: 'Cada 2 años', 'cada_n_años': 'Cada N años' };
-const AVISOS = [7, 15, 30, 45, 60, 90];
-const tipo = k => TIPOS[k] || TIPOS.otro;
-const añosRepite = c => ({ anual: 1, bienal: 2, 'cada_n_años': c.cadaN || 0 })[c.repite] || 0;
-const textoRepite = c => c.repite === 'cada_n_años' ? `Cada ${c.cadaN} años` : REPITE[c.repite] || '';
-const enAviso = c => !c.hecho && diasHasta(c.fecha) <= (c.avisoDias ?? 30);
-const porFecha = (a, b) => a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre);
-const cad = id => db.caducidades.find(c => c.id === id);
-
-function cadRow(c) {
-  const n = diasHasta(c.fecha);
-  const sub = [fmtDia(c.fecha), c.repite !== 'nunca' ? textoRepite(c) : ''].filter(Boolean).join(' · ');
-  const tag = c.hecho ? '<span class="tag">hecha</span>' : `<span class="tag ${enAviso(c) ? 'red' : ''}">${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>`;
-  return `<button class="row ${c.hecho ? 'done' : ''}" data-act="editCad" data-id="${c.id}">${ico(tipo(c.tipo))}
-    <div class="main"><div class="name">${esc(c.nombre)}</div><div class="sub">${sub}</div></div>${tag}</button>`;
-}
-
-function viewCaducidades() {
-  if (!db.caducidades.length) return `<div class="empty-state">Aún no tienes caducidades.<br>ITV, DNI, seguros, garantías… Pulsa <b>+</b> para añadir la primera.</div>`;
-  const pend = db.caducidades.filter(c => !c.hecho).sort(porFecha);
-  const hechas = db.caducidades.filter(c => c.hecho).sort((a, b) => -porFecha(a, b));
-  return `${pend.length ? pend.map(cadRow).join('') : '<div class="empty-state">No tienes nada pendiente.</div>'}
-    ${hechas.length ? `<button class="fold" data-act="toggleHechas">${ui.verHechas ? '▾' : '▸'} Hechas y renovadas (${hechas.length})</button>
-      ${ui.verHechas ? hechas.map(cadRow).join('') : ''}` : ''}`;
-}
-
-function viewHome() {
-  const pend = db.caducidades.filter(c => !c.hecho).sort(porFecha);
-  const prox = pend.filter(c => diasHasta(c.fecha) <= 60);
-  let cads;
-  if (prox.length) cads = prox.map(cadRow).join('');
-  else if (pend.length) cads = `<div class="empty-state" style="padding:24px 10px">Nada vence en los próximos 60 días.<br>Lo siguiente: <b>${esc(pend[0].nombre)}</b>, el ${fmtDia(pend[0].fecha)}.</div>`;
-  else cads = `<div class="empty-state" style="padding:24px 10px">No tienes caducidades.<br>Pulsa <b>+</b> para añadir la primera.</div>`;
-  const avisos = prox.filter(enAviso).length;
-  // Tareas vencidas, de hoy o de esta semana (hasta el domingo) y las que no tienen fecha, que hay que tener en mente.
-  // Las de fechas posteriores aparecerán cuando llegue su semana.
-  const fs = finSemana(), semana = pendientes().filter(t => !t.fecha || t.fecha <= fs);
-  const tareas = `<h2 class="sec">Tareas pendientes</h2>
-    ${semana.length ? gruposTareas(semana, true) : '<div class="small" style="padding:4px 2px 8px">Nada vencido, para esta semana ni sin fecha.</div>'}`;
-  // Días libres del año en curso, y también los del año anterior si aún quedan por gastar
-  const y = new Date().getFullYear(), conDatos = a => db.trabajo.ausencias.some(x => añoDe(x) === a || x.desde.startsWith(String(a)));
-  const dias = [y - 1, y].filter(a => a === y ? (conDatos(a) || db.trabajo.vacacionesTotales) : conDatos(a) && contadorDias(a).restantes > 0);
-  const libres = dias.length ? `<h2 class="sec">Días libres</h2>${dias.map(a => tarjetaDias(a, true)).join('')}` : '';
-  return `${backupBanner()}<h2 class="sec">Vence pronto${avisos ? ` <span class="tag red" style="vertical-align:middle">${avisos} con aviso</span>` : ''}</h2>
-    <div class="small" style="margin:-4px 0 6px">Próximos 60 días y lo ya vencido</div>${cads}${tareas}${libres}`;
-}
-
-// Crea la siguiente caducidad de una que se repite. Id determinista (como los recurrentes de Savey):
-// si dos dispositivos la renuevan a la vez, al sincronizar no se duplica.
-function renovar(c) {
-  c.hecho = true;
-  const n = añosRepite(c);
-  if (!n) return null;
-  const fecha = sumarAños(c.fecha, n);
-  const id = `${c.id.split('_')[0]}_${fecha}`;
-  if (!cad(id) && !db.deleted[id]) db.caducidades.push({ ...c, id, fecha, hecho: false, u: undefined });
-  return fecha;
-}
-
-function openCadForm(existing) {
-  const isEdit = !!existing;
-  const f = existing ? { ...existing } : { nombre: '', tipo: 'otro', fecha: '', avisoDias: 30, repite: 'nunca', cadaN: null, notas: '' };
-  const opts = (obj, cur) => Object.entries(obj).map(([k, l]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${l}</option>`).join('');
-  // Comprueba el formulario y devuelve los datos listos para guardar (o null si falta algo)
-  const datos = () => {
-    if (!f.nombre.trim()) { toast('Pon un nombre'); return null; }
-    if (!f.fecha) { toast('Elige la fecha'); return null; }
-    const cadaN = parseInt(f.cadaN, 10);
-    if (f.repite === 'cada_n_años' && !(cadaN >= 1 && cadaN <= 50)) { toast('Indica cada cuántos años'); return null; }
-    return { nombre: f.nombre.trim(), tipo: f.tipo, fecha: f.fecha, avisoDias: +f.avisoDias, repite: f.repite, cadaN: f.repite === 'cada_n_años' ? cadaN : null, notas: f.notas.trim() };
-  };
-  openSheet({
-    cls: 'full',
-    render: () => {
-      const avisos = AVISOS.includes(+f.avisoDias) ? AVISOS : [...AVISOS, +f.avisoDias].sort((a, b) => a - b);
-      const t = tipo(f.tipo);
-      return `${head(isEdit ? 'Editar caducidad' : 'Nueva caducidad')}
-      <div class="field"><label>Nombre</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="Ej. ITV coche"></div>
-      <div class="frow"><span>Tipo</span><span class="v">${ico(t)} ${t.n} ›</span><select class="overlay" data-on="tipo">${opts(Object.fromEntries(Object.entries(TIPOS).map(([k, v]) => [k, v.icon + ' ' + v.n])), f.tipo)}</select></div>
-      <div class="frow"><span>Fecha</span><span class="v ${f.fecha ? '' : 'ph'}">${f.fecha ? `${fmtDia(f.fecha)} <span class="muted">· ${textoDias(diasHasta(f.fecha))}</span>` : 'Seleccionar ›'}</span><input type="date" value="${f.fecha}" data-on="fecha"></div>
-      <div class="frow"><span>Avisar</span><span class="v">${f.avisoDias} días antes ›</span><select class="overlay" data-on="aviso">${avisos.map(n => `<option value="${n}" ${n === +f.avisoDias ? 'selected' : ''}>${n} días antes</option>`).join('')}</select></div>
-      <div class="frow"><span>Se repite</span><span class="v">${REPITE[f.repite]} ›</span><select class="overlay" data-on="repite">${opts(REPITE, f.repite)}</select></div>
-      ${f.repite === 'cada_n_años' ? `<div class="field"><label>Cada cuántos años</label><input data-input="cadaN" inputmode="numeric" value="${esc(f.cadaN ?? '')}" placeholder="Ej. 10"></div>` : ''}
-      <textarea class="note" rows="2" placeholder="Notas..." data-input="notas">${esc(f.notas)}</textarea>
-      ${!isEdit ? '' : existing.hecho
-          ? '<button class="btn ghost" style="width:100%" data-act="pendiente">Volver a marcar como pendiente</button>'
-          : `<button class="btn green" style="width:100%" data-act="renovar">✓ Hecho / renovado</button>
-             <div class="small" style="text-align:center;margin-top:6px">${f.repite !== 'nunca' ? 'Se creará la siguiente con la nueva fecha.' : 'Pasará a «Hechas y renovadas».'}</div>`}
-      <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`;
-    },
-    actions: {
-      nombre: t => f.nombre = t.value, notas: t => f.notas = t.value, cadaN: t => f.cadaN = t.value,
-      tipo: (t, s) => { f.tipo = t.value; s.refresh(); },
-      fecha: (t, s) => { if (t.value) { f.fecha = t.value; s.refresh(); } },
-      aviso: (t, s) => { f.avisoDias = +t.value; s.refresh(); },
-      repite: (t, s) => { f.repite = t.value; s.refresh(); },
-      save: (t, s) => {
-        const d = datos(); if (!d) return;
-        if (isEdit) Object.assign(existing, d);
-        else db.caducidades.push({ id: uid(), ...d, hecho: false });
-        save(); s.close(); render(); toast(isEdit ? 'Guardada' : 'Añadida');
-      },
-      renovar: (t, s) => {
-        const d = datos(); if (!d) return;
-        Object.assign(existing, d);
-        const next = renovar(existing);
-        save(); s.close(); render();
-        toast(next ? `Renovada · próxima el ${fmtDia(next)}` : 'Marcada como hecha');
-      },
-      pendiente: (t, s) => { existing.hecho = false; save(); s.close(); render(); toast('Pendiente otra vez'); },
-      del: (t, s) => {
-        if (!confirm(`¿Eliminar «${existing.nombre}»?`)) return;
-        db.caducidades = db.caducidades.filter(c => c.id !== existing.id);
-        save(); s.close(); render(); toast('Eliminada');
-      },
-    },
-  });
-}
-
-/* ---------------- Tareas ---------------- */
+const UNIDADES = { dias: ['día', 'días'], semanas: ['semana', 'semanas'], meses: ['mes', 'meses'], 'años': ['año', 'años'] };
+const CADA_UNO = { dias: 'Cada día', semanas: 'Cada semana', meses: 'Cada mes', 'años': 'Cada año' };
+const AVISOS = [1, 3, 7, 15, 30, 45, 60, 90];
 const PRIORIDADES = { alta: { n: 'Alta', color: 'var(--accent)' }, media: { n: 'Media', color: 'var(--warn)' }, baja: { n: 'Baja', color: 'var(--muted)' } };
 const ORDEN_PRIO = { alta: 0, media: 1, baja: 2 };
 const AMBITOS = { personal: 'Personal', trabajo: 'Trabajo' };
+const FILTROS = [['todas', 'Todas'], ['personal', 'Personal'], ['trabajo', 'Trabajo'], ['repite', 'Se repiten']];
 const tarea = id => db.tareas.find(t => t.id === id);
 // Domingo de esta semana (la semana empieza en lunes)
 const finSemana = () => { const d = new Date(); d.setDate(d.getDate() + (7 - d.getDay()) % 7); return dayKey(d); };
 const porTarea = (a, b) => (a.fecha || '9999').localeCompare(b.fecha || '9999') || ORDEN_PRIO[a.prioridad] - ORDEN_PRIO[b.prioridad] || (a.creada || '').localeCompare(b.creada || '');
-const pendientes = ambito => db.tareas.filter(t => t.estado !== 'hecha' && (!ambito || ambito === 'todas' || t.ambito === ambito)).sort(porTarea);
+const cumpleFiltro = (t, f) => !f || f === 'todas' || (f === 'repite' ? !!t.repite : t.ambito === f);
+const pendientes = filtro => db.tareas.filter(t => t.estado !== 'hecha' && cumpleFiltro(t, filtro)).sort(porTarea);
+const textoRepite = r => !r ? '' : r.cada === 1 ? CADA_UNO[r.unidad] : `Cada ${r.cada} ${UNIDADES[r.unidad]?.[1] || ''}`;
+// Ya dentro de su ventana de aviso (o vencida)
+const enAviso = t => t.estado !== 'hecha' && !!t.fecha && t.avisoDias != null && diasHasta(t.fecha) <= t.avisoDias;
+
+// Siguiente fecha de una repetición. En meses y años, si el día no existe (31, 29 de febrero) se usa el último del mes.
+function sumarRepeticion(fecha, r) {
+  const [y, m, d] = fecha.split('-').map(Number), n = Math.max(1, r.cada | 0);
+  if (r.unidad === 'dias' || r.unidad === 'semanas') return dayKey(new Date(y, m - 1, d + n * (r.unidad === 'semanas' ? 7 : 1)));
+  const meses = (m - 1) + (r.unidad === 'meses' ? n : n * 12), ny = y + Math.floor(meses / 12), nm = meses % 12;
+  return dayKey(new Date(ny, nm, Math.min(d, new Date(ny, nm + 1, 0).getDate())));
+}
+// Marca una tarea como hecha; si se repite, crea la siguiente (la primera fecha que no haya pasado).
+// Id determinista (como los recurrentes de Savey): si dos dispositivos la completan a la vez, no se duplica.
+function completar(t) {
+  t.estado = 'hecha';
+  if (!t.repite || !t.fecha) return null;
+  let fecha = sumarRepeticion(t.fecha, t.repite);
+  for (let g = 0; fecha < hoy() && g < 1000; g++) fecha = sumarRepeticion(fecha, t.repite);
+  const id = `${t.id.split('_')[0]}_${fecha}`;
+  if (!tarea(id) && !db.deleted[id]) db.tareas.push({ ...t, id, fecha, estado: 'pendiente', creada: hoy(), u: undefined });
+  return fecha;
+}
+function toggleTarea(t) {
+  if (t.estado === 'hecha') { t.estado = 'pendiente'; save(); render(); return toast('Pendiente otra vez'); }
+  const next = completar(t);
+  save(); render(); toast(next ? `Hecha · la siguiente, el ${fmtDia(next)}` : 'Hecha');
+}
+// Convierte las caducidades antiguas en tareas (mismo id, para que la sincronización no las duplique)
+function migrarCaducidades(d) {
+  for (const c of d.caducidades || []) {
+    if (d.tareas.some(t => t.id === c.id)) continue;
+    const años = ({ anual: 1, bienal: 2, 'cada_n_años': c.cadaN || 0 })[c.repite] || 0;
+    d.tareas.push({ id: c.id, u: c.u, titulo: c.nombre || '', ambito: 'personal', fecha: c.fecha || null, prioridad: 'media', estado: c.hecho ? 'hecha' : 'pendiente', notas: c.notas || '', creada: '',
+      repite: años ? { cada: años, unidad: 'años' } : null, avisoDias: c.avisoDias ?? 30, tipo: c.tipo || null });
+  }
+  d.caducidades = [];
+}
 
 function tareaRow(t, conAmbito = false) {
-  const hecha = t.estado === 'hecha';
-  const n = t.fecha ? diasHasta(t.fecha) : null;
-  const sub = [t.fecha ? `<span class="${!hecha && n < 0 ? 'red' : ''}">${fmtDia(t.fecha)} · ${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>` : '', conAmbito ? AMBITOS[t.ambito] : '', t.notas ? esc(t.notas) : ''].filter(Boolean).join(' · ');
+  const hecha = t.estado === 'hecha', n = t.fecha ? diasHasta(t.fecha) : null, conAviso = !hecha && t.fecha && t.avisoDias != null;
+  const fechaTxt = t.fecha ? (conAviso ? fmtDia(t.fecha) : `<span class="${!hecha && n < 0 ? 'red' : ''}">${fmtDia(t.fecha)} · ${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>`) : '';
+  const sub = [fechaTxt, t.repite ? '🔁 ' + textoRepite(t.repite) : '', conAmbito ? AMBITOS[t.ambito] : '', t.notas ? esc(t.notas) : ''].filter(Boolean).join(' · ');
+  const tag = conAviso ? `<span class="tag ${enAviso(t) ? 'red' : ''}">${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>` : '';
+  const ic = TIPOS[t.tipo] ? `<span class="tico">${TIPOS[t.tipo].icon}</span>` : '';
   return `<div class="row ${hecha ? 'done' : ''}"><button class="check ${hecha ? 'on' : ''}" data-act="toggleTarea" data-id="${t.id}" aria-label="${hecha ? 'Marcar como pendiente' : 'Marcar como hecha'}"></button>
-    <button class="rowmain" data-act="editTarea" data-id="${t.id}"><div class="main"><div class="name"><span class="dot" style="background:${PRIORIDADES[t.prioridad]?.color}"></span>${esc(t.titulo)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div></button></div>`;
+    <button class="rowmain" data-act="editTarea" data-id="${t.id}"><div class="main"><div class="name"><span class="dot" style="background:${PRIORIDADES[t.prioridad]?.color}"></span>${ic}${esc(t.titulo)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${tag}</button></div>`;
 }
 function gruposTareas(list, conAmbito) {
   const h = hoy(), fs = finSemana();
-  const g = [['Vencidas', t => t.fecha && t.fecha < h], ['Hoy', t => t.fecha === h], ['Esta semana', t => t.fecha && t.fecha > h && t.fecha <= fs], ['Más adelante', t => t.fecha && t.fecha > fs], ['Sin fecha', t => !t.fecha]];
+  const g = [['Vencidas', t => t.fecha && t.fecha < h], ['Hoy', t => t.fecha === h], ['Esta semana', t => t.fecha && t.fecha > h && t.fecha <= fs],
+    ['Se acerca', t => t.fecha && t.fecha > fs && enAviso(t)], ['Más adelante', t => t.fecha && t.fecha > fs && !enAviso(t)], ['Sin fecha', t => !t.fecha]];
   return g.map(([titulo, f]) => { const l = list.filter(f); return l.length ? `<div class="grp">${titulo}</div>${l.map(t => tareaRow(t, conAmbito)).join('')}` : ''; }).join('');
 }
 function viewTareas() {
-  const filtro = ui.filtroTareas || 'todas';
-  const seg = `<div class="seg" style="margin:6px 0 4px">${[['todas', 'Todas'], ['personal', 'Personal'], ['trabajo', 'Trabajo']].map(([k, l]) => `<button class="${filtro === k ? 'on' : ''}" data-act="filtroTareas" data-f="${k}">${l}</button>`).join('')}</div>`;
+  const filtro = FILTROS.some(([k]) => k === ui.filtroTareas) ? ui.filtroTareas : 'todas';
+  const seg = `<div class="seg" style="margin:6px 0 4px">${FILTROS.map(([k, l]) => `<button class="${filtro === k ? 'on' : ''}" data-act="filtroTareas" data-f="${k}">${l}</button>`).join('')}</div>`;
   const pend = pendientes(filtro);
-  const hechas = db.tareas.filter(t => t.estado === 'hecha' && (filtro === 'todas' || t.ambito === filtro)).sort((a, b) => (b.u || 0) - (a.u || 0));
-  return `${seg}${pend.length ? gruposTareas(pend, filtro === 'todas') : `<div class="empty-state">No tienes tareas pendientes${filtro !== 'todas' ? ' de ' + AMBITOS[filtro].toLowerCase() : ''}.<br>Pulsa <b>+</b> para añadir una.</div>`}
+  const hechas = db.tareas.filter(t => t.estado === 'hecha' && cumpleFiltro(t, filtro)).sort((a, b) => (b.u || 0) - (a.u || 0));
+  const vacio = filtro === 'repite' ? 'No tienes nada que se repita.<br>ITV, DNI, seguros, garantías, recibos… ponles fecha y repetición.' : `No tienes nada pendiente${filtro !== 'todas' ? ' de ' + AMBITOS[filtro].toLowerCase() : ''}.`;
+  return `${seg}${pend.length ? gruposTareas(pend, filtro === 'todas' || filtro === 'repite') : `<div class="empty-state">${vacio}<br>Pulsa <b>+</b> para añadir.</div>`}
     ${hechas.length ? `<button class="fold" data-act="toggleCompletadas">${ui.verCompletadas ? '▾' : '▸'} Completadas (${hechas.length})</button>${ui.verCompletadas ? hechas.map(t => tareaRow(t, filtro === 'todas')).join('') : ''}` : ''}`;
 }
-function toggleTarea(t) {
-  t.estado = t.estado === 'hecha' ? 'pendiente' : 'hecha';
-  save(); render(); toast(t.estado === 'hecha' ? 'Hecha' : 'Pendiente otra vez');
+
+function viewHome() {
+  // Pendientes vencidos, de hoy o de esta semana (hasta el domingo), los que ya están dentro de su aviso
+  // y los que no tienen fecha, que hay que tener en mente. El resto aparecerá cuando le llegue el momento.
+  const fs = finSemana(), lista = pendientes().filter(t => !t.fecha || t.fecha <= fs || enAviso(t));
+  const avisos = lista.filter(enAviso).length;
+  const pend = `<h2 class="sec">Pendientes${avisos ? ` <span class="tag red" style="vertical-align:middle">${plural(avisos, 'con aviso', 'con aviso')}</span>` : ''}</h2>
+    ${lista.length ? gruposTareas(lista, true) : `<div class="empty-state" style="padding:24px 10px">Nada vencido, para esta semana ni sin fecha.<br>Pulsa <b>+</b> para añadir algo.</div>`}`;
+  // Días libres del año en curso, y también los del año anterior si aún quedan por gastar
+  const y = new Date().getFullYear(), conDatos = a => db.trabajo.ausencias.some(x => añoDe(x) === a || x.desde.startsWith(String(a)));
+  const dias = [y - 1, y].filter(a => a === y ? (conDatos(a) || db.trabajo.vacacionesTotales) : conDatos(a) && contadorDias(a).restantes > 0);
+  const libres = dias.length ? `<h2 class="sec">Días libres</h2>${dias.map(a => tarjetaDias(a, true)).join('')}` : '';
+  return `${backupBanner()}${pend}${libres}`;
 }
 
 function openTareaForm(existing, preset = {}) {
   const isEdit = !!existing;
-  const f = existing ? { ...existing } : { titulo: '', ambito: 'personal', fecha: null, prioridad: 'media', notas: '', ...preset };
+  const f = existing ? { ...existing, repite: existing.repite ? { ...existing.repite } : null }
+    : { titulo: '', ambito: 'personal', fecha: null, prioridad: 'media', notas: '', repite: null, avisoDias: null, tipo: null, ...preset };
+  let cadaTxt = String(f.repite?.cada || 1);
   const seg = (key, opts) => `<div class="seg lg" style="margin:4px 0">${Object.entries(opts).map(([k, l]) => `<button class="${f[key] === k ? 'on' : ''}" data-act="set" data-k="${key}" data-v="${k}">${l}</button>`).join('')}</div>`;
+  const opt = (v, l, cur) => `<option value="${v}" ${String(cur ?? '') === String(v) ? 'selected' : ''}>${l}</option>`;
   openSheet({
     cls: 'full',
-    render: () => `${head(isEdit ? 'Editar tarea' : 'Nueva tarea')}
-      <div class="field"><label>Tarea</label><input data-input="titulo" value="${esc(f.titulo)}" placeholder="Ej. Pedir cita del médico"></div>
+    render: () => {
+      const t = TIPOS[f.tipo], avisos = f.avisoDias == null || AVISOS.includes(f.avisoDias) ? AVISOS : [...AVISOS, f.avisoDias].sort((a, b) => a - b);
+      return `${head(isEdit ? 'Editar' : 'Nuevo pendiente')}
+      <div class="field"><label>Qué</label><input data-input="titulo" value="${esc(f.titulo)}" placeholder="Ej. Llamar al banco o renovar la ITV"></div>
       <div class="field"><label>Ámbito</label>${seg('ambito', AMBITOS)}</div>
       <div class="frow"><span>Fecha</span><span class="v ${f.fecha ? '' : 'ph'}">${f.fecha ? `${fmtDia(f.fecha)} <span class="muted">· ${textoDias(diasHasta(f.fecha))}</span>` : 'Sin fecha ›'}</span><input type="date" value="${f.fecha || ''}" data-on="fecha"></div>
-      ${f.fecha ? '<button class="link" data-act="sinFecha">Quitar fecha</button>' : ''}
+      ${f.fecha ? `<button class="link" data-act="sinFecha">Quitar fecha</button>
+        <div class="frow"><span>Se repite</span><span class="v">${f.repite ? textoRepite(f.repite) : 'No'} ›</span><select class="overlay" data-on="unidad">${opt('', 'No se repite', f.repite?.unidad)}${Object.entries(UNIDADES).map(([k, [, pl]]) => opt(k, 'Cada X ' + pl, f.repite?.unidad)).join('')}</select></div>
+        ${f.repite ? `<div class="field"><label>Cada cuántos ${UNIDADES[f.repite.unidad][1]}</label><input data-input="cada" inputmode="numeric" value="${esc(cadaTxt)}"></div>` : ''}
+        <div class="frow"><span>Avisar</span><span class="v">${f.avisoDias == null ? 'Solo la semana que toca' : f.avisoDias + ' días antes'} ›</span><select class="overlay" data-on="aviso">${opt('', 'Solo la semana que toca', f.avisoDias)}${avisos.map(n => opt(n, n + ' días antes', f.avisoDias)).join('')}</select></div>`
+        : '<div class="small" style="padding:6px 0">Ponle fecha si quieres que se repita o que te avise con antelación.</div>'}
       <div class="field"><label>Prioridad</label>${seg('prioridad', Object.fromEntries(Object.entries(PRIORIDADES).map(([k, v]) => [k, v.n])))}</div>
+      <div class="frow"><span>Icono</span><span class="v ${t ? '' : 'ph'}">${t ? `${t.icon} ${t.n}` : 'Ninguno'} ›</span><select class="overlay" data-on="tipo">${opt('', 'Ninguno', f.tipo)}${Object.entries(TIPOS).map(([k, v]) => opt(k, v.icon + ' ' + v.n, f.tipo)).join('')}</select></div>
       <textarea class="note" rows="2" placeholder="Notas..." data-input="notas">${esc(f.notas)}</textarea>
-      ${isEdit ? `<button class="btn ${existing.estado === 'hecha' ? 'ghost' : 'green'}" style="width:100%" data-act="toggle">${existing.estado === 'hecha' ? 'Volver a marcar como pendiente' : '✓ Marcar como hecha'}</button>` : ''}
-      <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`,
+      ${isEdit ? (existing.estado === 'hecha' ? '<button class="btn ghost" style="width:100%" data-act="toggle">Volver a marcar como pendiente</button>'
+        : `<button class="btn green" style="width:100%" data-act="toggle">✓ Marcar como hecha</button>${existing.repite ? '<div class="small" style="text-align:center;margin-top:6px">Se creará la siguiente con la nueva fecha.</div>' : ''}`) : ''}
+      <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`;
+    },
     actions: {
-      titulo: t => f.titulo = t.value, notas: t => f.notas = t.value,
+      titulo: t => f.titulo = t.value, notas: t => f.notas = t.value, cada: t => cadaTxt = t.value,
       set: (t, s) => { f[t.dataset.k] = t.dataset.v; s.refresh(); },
       fecha: (t, s) => { if (t.value) { f.fecha = t.value; s.refresh(); } },
-      sinFecha: (t, s) => { f.fecha = null; s.refresh(); },
+      sinFecha: (t, s) => { f.fecha = null; f.repite = null; f.avisoDias = null; s.refresh(); },
+      unidad: (t, s) => { f.repite = t.value ? { cada: parseInt(cadaTxt, 10) || 1, unidad: t.value } : null; s.refresh(); },
+      aviso: (t, s) => { f.avisoDias = t.value === '' ? null : +t.value; s.refresh(); },
+      tipo: (t, s) => { f.tipo = t.value || null; s.refresh(); },
       save: (t, s) => {
-        if (!f.titulo.trim()) return toast('Escribe la tarea');
-        const d = { titulo: f.titulo.trim(), ambito: f.ambito, fecha: f.fecha || null, prioridad: f.prioridad, notas: f.notas.trim() };
+        if (!f.titulo.trim()) return toast('Escribe qué es');
+        let repite = null;
+        if (f.fecha && f.repite) {
+          const cada = parseInt(cadaTxt, 10);
+          if (!(cada >= 1 && cada <= 99)) return toast('Indica cada cuántos ' + UNIDADES[f.repite.unidad][1]);
+          repite = { cada, unidad: f.repite.unidad };
+        }
+        const d = { titulo: f.titulo.trim(), ambito: f.ambito, fecha: f.fecha || null, prioridad: f.prioridad, notas: f.notas.trim(), repite, avisoDias: f.fecha ? f.avisoDias : null, tipo: f.tipo || null };
         if (isEdit) Object.assign(existing, d);
         else db.tareas.push({ id: uid(), ...d, estado: 'pendiente', creada: hoy() });
-        save(); s.close(); render(); toast(isEdit ? 'Guardada' : 'Añadida');
+        save(); s.close(); render(); toast(isEdit ? 'Guardado' : 'Añadido');
       },
       toggle: (t, s) => { s.close(); toggleTarea(existing); },
       del: (t, s) => {
         if (!confirm(`¿Eliminar «${existing.titulo}»?`)) return;
         db.tareas = db.tareas.filter(x => x.id !== existing.id);
-        save(); s.close(); render(); toast('Eliminada');
+        save(); s.close(); render(); toast('Eliminado');
       },
     },
     onRender: s => { if (!isEdit && !f.titulo) setTimeout(() => s.el.querySelector('[data-input=titulo]')?.focus(), 300); },
@@ -688,7 +645,7 @@ function openSettings() {
       <button class="set-row" data-act="backup"><span class="ic">☁︎</span><span class="t">Copia de seguridad<div class="small">${st.lastBackup ? 'Última: ' + longDate(new Date(st.lastBackup)) : 'Nunca'}</div></span>›</button>
       <button class="set-row" data-act="restore"><span class="ic">⤓</span><span class="t">Restaurar copia de seguridad</span>›</button>
       <button class="set-row" data-act="reset"><span class="ic">⟲</span><span class="t">Restablecer datos</span>›</button>
-      <p class="small" style="margin-top:18px">${db.caducidades.length} caducidades · ${db.tareas.length} tareas · ${db.trabajo.ausencias.length} días pedidos y festivos.<br>
+      <p class="small" style="margin-top:18px">${db.tareas.filter(t => t.estado !== 'hecha').length} pendientes (${db.tareas.length} en total) · ${db.trabajo.ausencias.length} días pedidos y festivos.<br>
       ${sync?.token ? 'Los datos se guardan en este dispositivo y en tu repositorio privado de GitHub, con su historial.' : 'Los datos se guardan solo en este dispositivo. Haz copias de seguridad de vez en cuando y guárdalas en iCloud Drive, o activa la sincronización con GitHub.'}</p>`,
     actions: {
       set: (t, s) => { st[t.dataset.k] = t.value; save(); s.refresh(); render(); },
@@ -730,15 +687,16 @@ async function exportBackup() {
 function restoreBackup(text) {
   let data;
   try { data = JSON.parse(text); } catch (e) { return alert('El archivo no es una copia válida.'); }
-  if (data.app !== 'panel' || !Array.isArray(data.caducidades)) return alert('El archivo no es una copia de Panel.');
-  if (!confirm(`La copia tiene ${data.caducidades.length} caducidades y ${(data.tareas || []).length} tareas. Se REEMPLAZARÁN los datos actuales. ¿Continuar?`)) return;
+  if (data.app !== 'panel' || !Array.isArray(data.tareas)) return alert('El archivo no es una copia de Panel.');
+  data.caducidades = data.caducidades || [];
+  if (!confirm(`La copia tiene ${data.tareas.length + data.caducidades.length} pendientes. Se REEMPLAZARÁN los datos actuales. ¿Continuar?`)) return;
   delete data.app; delete data.exportedAt;
   const settings = db.settings;
   db = data; normalize(); db.settings = { ...db.settings, theme: settings.theme }; save();
   sheets.slice().forEach(closeSheet); render(); toast('Copia restaurada');
 }
 function backupBanner() {
-  if (!db.caducidades.length && !db.tareas.length && !db.trabajo.ausencias.length) return '';
+  if (!db.tareas.length && !db.trabajo.ausencias.length) return '';
   if (sync?.token) {
     // Con sincronización, GitHub ya guarda una copia de todo (y su historial): solo avisar si lleva días sin sincronizar
     const ls = sync.lastSync ? new Date(sync.lastSync) : null;
@@ -757,8 +715,6 @@ const mainActions = {
   gastosSetup: () => openGastosSetup(),
   gastosRefresh: () => cargarGastos(true),
   settings: () => openSettings(),
-  editCad: t => { const c = cad(t.dataset.id); if (c) openCadForm(c); },
-  toggleHechas: () => { ui.verHechas = !ui.verHechas; render(); },
   backup: () => exportBackup(),
   filtroTareas: t => { ui.filtroTareas = t.dataset.f; render(); },
   toggleCompletadas: () => { ui.verCompletadas = !ui.verCompletadas; render(); },
@@ -1007,7 +963,7 @@ function openSyncSetup() {
           const { data } = await pullRemote(cfg);
           const n = d => d.caducidades.length + d.tareas.length + d.trabajo.ausencias.length;
           if (data && n(data)) {
-            const replace = confirm(`En GitHub ya hay datos (${data.caducidades.length} caducidades, ${data.tareas.length} tareas, ${data.trabajo.ausencias.length} días y festivos).\n\nAceptar: usar los de GitHub y descartar los de este dispositivo (${n(db)} registros). Recomendado si este no es tu dispositivo principal.\n\nCancelar: combinar ambos.`);
+            const replace = confirm(`En GitHub ya hay datos (${data.tareas.length + data.caducidades.length} pendientes y ${data.trabajo.ausencias.length} días y festivos).\n\nAceptar: usar los de GitHub y descartar los de este dispositivo (${n(db)} registros). Recomendado si este no es tu dispositivo principal.\n\nCancelar: combinar ambos.`);
             if (replace) { db = { ...data, settings: db.settings }; normalize(); saveRaw(); }
           }
           sync = { ...cfg, lastSync: null, lastError: null }; saveSyncCfg();
