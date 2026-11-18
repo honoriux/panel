@@ -1,7 +1,7 @@
 // Service worker: permite usar la app sin conexión.
 // Sirve desde caché y actualiza en segundo plano (los cambios se ven al siguiente arranque).
 // CACHE tiene que coincidir con APP_VERSION de app.js ('panel-AAAA-MM-DD.N': fecha de publicación y nº de ese día).
-const CACHE = 'panel-2026-11-19.1';
+const CACHE = 'panel-2026-11-19.2';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

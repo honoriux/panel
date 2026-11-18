@@ -35,7 +35,7 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
 
 ## Secciones
 1. **Inicio**: pendientes vencidos, de hoy, de esta semana, los que ya están dentro de su `avisoDias` y los que no tienen fecha; días libres que quedan del año.
-2. **Pendientes**: tareas y renovaciones juntas, con filtro (todas, personal, trabajo, con repetición), fecha opcional, prioridad, repetición, aviso y completadas plegadas.
+2. **Pendientes**: tareas y renovaciones juntas, con filtro (todas, personal, trabajo, periódicas), fecha opcional, prioridad, repetición, aviso y completadas plegadas.
 3. **Trabajo**: tareas de ámbito trabajo, calendario laboral (lista, mes y año) y una **bolsa única de días libres por año**. Solo datos genéricos: nada confidencial de clientes.
    - Total del año = `vacacionesTotales` (22 de vacaciones + 2 de libre disposición = 24) + los festivos locales y autonómicos de **Sevilla** de ese año que caen entre semana y no son fiesta nacional. Para Álvaro no son festivos, sino días libres más que se piden como cualquier otro: en el calendario no se distinguen.
    - Cada ausencia que descuenta (`vacaciones`, `asuntos_propios`) lleva `año`: el año de días al que cuenta, que puede no ser el de su fecha. `otro` no descuenta. Los festivos (`festivo_*`) son solo referencia: suman al total de su año y su `estado` no se usa.

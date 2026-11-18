@@ -69,7 +69,7 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 - **Pendientes**: tareas y renovaciones juntas (lo que antes eran Tareas y Caducidades). Cada una puede tener fecha, prioridad, ámbito (personal o trabajo), icono y notas, y si tiene fecha:
   - **Se repite** cada N días, semanas, meses o años: al marcarla como hecha se crea sola la siguiente (si ibas con retraso, la primera fecha que aún no ha pasado). Sirve para la ITV, el DNI o los seguros, y también para recibos o tareas periódicas.
   - **Avisar** con N días de antelación: desde entonces aparece en Inicio y con la etiqueta en rojo. Sin aviso, aparece la semana que toca.
-  - Filtros: todas, personal, trabajo y «se repiten». Toca el círculo para completarla; las completadas quedan plegadas.
+  - Filtros: todas, personal, trabajo y «periódicas». Toca el círculo para completarla; las completadas quedan plegadas.
 - **Trabajo**:
   - Las tareas de trabajo pendientes.
   - **Días libres del año**: una sola bolsa con las vacaciones y la libre disposición (24 por defecto, se cambia en **Editar**) más los festivos de Sevilla de ese año. Muestra totales, disfrutados, pedidos y restantes, en días laborables: no cuentan fines de semana, fiestas nacionales ni el 24 y 31 de diciembre. Una petición aprobada cuenta sola como disfrutada cuando pasa su fecha.

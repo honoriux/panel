@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.1';
+const APP_VERSION = 'panel-2026-11-19.2';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -143,7 +143,7 @@ const I = {
 /* ---------------- Pestañas ----------------
    "fab" es lo que hace el botón + en esa pestaña (Gastos no tiene: es solo lectura). */
 const TABS = [
-  { k: 'home', label: 'Inicio', icon: I.home, title: 'Panel', view: viewHome, fab: () => openTareaForm(null) },
+  { k: 'home', label: 'Inicio', icon: I.home, title: 'Inicio', view: viewHome, fab: () => openTareaForm(null) },
   { k: 'tareas', label: 'Pendientes', icon: I.check, title: 'Pendientes', view: viewTareas, fab: () => openTareaForm(null, { ambito: ui.filtroTareas === 'trabajo' ? 'trabajo' : 'personal' }) },
   { k: 'trabajo', label: 'Trabajo', icon: I.briefcase, title: 'Trabajo', view: viewTrabajo, fab: () => pickList('Añadir', [['tarea', '☑️ Tarea de trabajo'], ['aus', '🏖️ Pedir días'], ['fest', '🏛️ Festivo']], null, v => v === 'tarea' ? openTareaForm(null, { ambito: 'trabajo' }) : v === 'aus' ? openAusForm(null) : openAusForm(null, { tipo: 'festivo_local' })) },
   { k: 'gastos', label: 'Gastos', icon: I.chart, title: 'Gastos', view: viewGastos, fab: null },
@@ -182,7 +182,7 @@ const AVISOS = [1, 3, 7, 15, 30, 45, 60, 90];
 const PRIORIDADES = { alta: { n: 'Alta', color: 'var(--accent)' }, media: { n: 'Media', color: 'var(--warn)' }, baja: { n: 'Baja', color: 'var(--muted)' } };
 const ORDEN_PRIO = { alta: 0, media: 1, baja: 2 };
 const AMBITOS = { personal: 'Personal', trabajo: 'Trabajo' };
-const FILTROS = [['todas', 'Todas'], ['personal', 'Personal'], ['trabajo', 'Trabajo'], ['repite', 'Se repiten']];
+const FILTROS = [['todas', 'Todas'], ['personal', 'Personal'], ['trabajo', 'Trabajo'], ['repite', 'Periódicas']];
 const tarea = id => db.tareas.find(t => t.id === id);
 // Domingo de esta semana (la semana empieza en lunes)
 const finSemana = () => { const d = new Date(); d.setDate(d.getDate() + (7 - d.getDay()) % 7); return dayKey(d); };
@@ -247,7 +247,7 @@ function viewTareas() {
   const seg = `<div class="seg" style="margin:6px 0 4px">${FILTROS.map(([k, l]) => `<button class="${filtro === k ? 'on' : ''}" data-act="filtroTareas" data-f="${k}">${l}</button>`).join('')}</div>`;
   const pend = pendientes(filtro);
   const hechas = db.tareas.filter(t => t.estado === 'hecha' && cumpleFiltro(t, filtro)).sort((a, b) => (b.u || 0) - (a.u || 0));
-  const vacio = filtro === 'repite' ? 'No tienes nada que se repita.<br>ITV, DNI, seguros, garantías, recibos… ponles fecha y repetición.' : `No tienes nada pendiente${filtro !== 'todas' ? ' de ' + AMBITOS[filtro].toLowerCase() : ''}.`;
+  const vacio = filtro === 'repite' ? 'No tienes tareas periódicas.<br>ITV, DNI, seguros, garantías, recibos… ponles fecha y repetición.' : `No tienes nada pendiente${filtro !== 'todas' ? ' de ' + AMBITOS[filtro].toLowerCase() : ''}.`;
   return `${seg}${pend.length ? gruposTareas(pend, filtro === 'todas' || filtro === 'repite') : `<div class="empty-state">${vacio}<br>Pulsa <b>+</b> para añadir.</div>`}
     ${hechas.length ? `<button class="fold" data-act="toggleCompletadas">${ui.verCompletadas ? '▾' : '▸'} Completadas (${hechas.length})</button>${ui.verCompletadas ? hechas.map(t => tareaRow(t, filtro === 'todas')).join('') : ''}` : ''}`;
 }
