@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.6';
+const APP_VERSION = 'panel-2026-11-19.7';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -577,8 +577,6 @@ function gridMes(y, m, mini = false) {
   return `<div class="cal ${mini ? 'mini' : ''}">${cells}</div>`;
 }
 const leyenda = () => `<div class="leyenda">${LEYENDA.map(([c, l]) => `<span><i class="d ${c}"></i>${l}</span>`).join('')}<span><i class="d hoy"></i>Hoy</span></div>`;
-// Botón para volver al mes (o año) actual; solo aparece si se está viendo otro
-const volverHoy = mostrar => mostrar ? '<div style="text-align:center;margin:-2px 0 10px"><button class="tag chip" data-act="calHoy">↩ Volver a hoy</button></div>' : '';
 function calCursor() {
   if (ui.calY == null) { const t = new Date(); ui.calY = t.getFullYear(); ui.calM = t.getMonth(); }
   return { y: ui.calY, m: ui.calM };
@@ -595,7 +593,6 @@ function viewMes() {
   return `<div class="calnav"><button class="iconbtn" data-act="calPrev" aria-label="Mes anterior">${I.left}</button>
       <button class="serif" data-act="calHoy" style="font-size:21px">${mesNombre(m)} <span class="red">${y}</span></button>
       <button class="iconbtn" data-act="calNext" aria-label="Mes siguiente">${I.right}</button></div>
-    ${volverHoy(y !== new Date().getFullYear() || m !== new Date().getMonth())}
     ${gridMes(y, m)}
     <div class="small" style="text-align:center;margin:8px 0 4px">${resumen || 'Sin días libres este mes'}</div>
     ${leyenda()}`;
@@ -605,7 +602,6 @@ function viewAñoCal() {
   return `<div class="calnav"><button class="iconbtn" data-act="calPrevY" aria-label="Año anterior">${I.left}</button>
       <button class="serif" data-act="calHoy" style="font-size:21px">${y}</button>
       <button class="iconbtn" data-act="calNextY" aria-label="Año siguiente">${I.right}</button></div>
-    ${volverHoy(y !== new Date().getFullYear())}
     <div class="year">${MONTHS_L.map((_, m) => `<button class="mes" data-act="abrirMes" data-m="${m}"><div class="mt">${mesNombre(m)}</div>${gridMes(y, m, true)}</button>`).join('')}</div>
     ${leyenda()}`;
 }
@@ -849,6 +845,16 @@ document.addEventListener('change', ev => {
   const t = ev.target.closest('[data-change]');
   if (t) changeActions[t.dataset.change]?.(t, ev);
 });
+
+// Deslizar a izquierda/derecha en la vista de mes del calendario para cambiar de mes (como en Savey)
+let sx = null, sy = null;
+$('#view').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+$('#view').addEventListener('touchend', e => {
+  if (sx === null) return;
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+  if (ui.tab !== 'trabajo' || ui.vistaTrabajo !== 'mes' || sheets.length) return;
+  if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) (dx < 0 ? mainActions.calNext : mainActions.calPrev)();
+}, { passive: true });
 
 function applyTheme() {
   const th = db.settings.theme;
