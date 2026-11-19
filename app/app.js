@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.18';
+const APP_VERSION = 'panel-2026-11-19.19';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -191,6 +191,7 @@ const TIPOS = {
   impuesto: { n: 'Impuesto', icon: '🧾', color: '#f08a3c' },
   garantia: { n: 'Garantía', icon: '📦', color: '#9c6b4e' },
   suscripcion: { n: 'Suscripción', icon: '📺', color: '#7c84e8' },
+  cumple: { n: 'Cumpleaños', icon: '🎂', color: '#e6619a' }, // los que vienen de Google Calendar llevan este tipo
   otro: { n: 'Otro', icon: '📄', color: '#7a7f8c' },
 };
 const UNIDADES = { dias: ['día', 'días'], semanas: ['semana', 'semanas'], meses: ['mes', 'meses'], 'años': ['año', 'años'] };

@@ -80,7 +80,30 @@ La hora y cuándo salen las tareas con aviso y las vencidas se eligen en ⚙️ 
 
 GitHub lo lanza cada hora con unos minutos de retraso; si un envío falla, lo reintenta cada hora ese mismo día. Si al final no se ha podido enviar (o no se ha llegado a ejecutar), Panel lo dice con un aviso ⚠️ en Inicio y en Configuración → Avisos por WhatsApp. El motivo está en el registro de **Actions** de `panel-data` (por ejemplo, si faltan los Secrets o CallMeBot rechazó el mensaje). Cada aviso guarda su resultado en `avisos-estado.json`, así que `panel-data` tiene un commit automático al día.
 
-## 6. No perder los datos
+## 6. Google Calendar
+
+Cada hora (en la misma ejecución que los avisos), `panel-data` sincroniza con tu Google Calendar:
+- **Nora → Google:** los días libres (vacaciones, libre disposición y otros, con su estado: «(pedido)», «(por pedir)») y las tareas pendientes con fecha aparecen en un calendario propio llamado **Nora**, como eventos de día completo. Lo pasado no sale. Solo títulos y fechas, nunca notas. Ese calendario lo lleva Nora: lo que cambies o crees allí a mano se sobrescribe o se borra.
+- **Google → Nora:** los eventos que se repiten **cada año** del calendario donde apuntas los cumpleaños pasan a Nora como tareas periódicas 🎂 con aviso 7 días antes (salen en Inicio y en el WhatsApp). Si cambias el nombre o el día en Google, se actualiza; si lo quitas de Google, se quita de Nora; si lo borras en Nora, no vuelve. Cámbialos en Google, no en Nora.
+
+Los cambios tardan como mucho una hora en llegar (si tienes prisa: **Actions → Google Calendar → Run workflow**).
+
+**Una sola vez (unos 15 minutos):**
+1. **Proyecto de Google Cloud:** en [console.cloud.google.com](https://console.cloud.google.com) crea un proyecto (por ejemplo, `nora`).
+2. **Activa la API:** *APIs y servicios → Biblioteca →* **Google Calendar API** → *Habilitar*.
+3. **Cuenta de servicio** (el «usuario robot» de Nora): *IAM y administración → Cuentas de servicio → Crear cuenta de servicio*, nombre `nora`, sin roles → *Listo*. Ábrela → *Claves → Agregar clave → Crear clave nueva → JSON*: se descarga un archivo. Copia también su correo (`nora@….iam.gserviceaccount.com`).
+4. **Calendario «Nora»:** en [Google Calendar](https://calendar.google.com) (en el ordenador) → *Otros calendarios → + → Crear calendario* → «Nora». En su *Configuración y uso compartido*: *Compartir con determinadas personas → Añadir* el correo de la cuenta de servicio con permiso **Hacer cambios en eventos**. Más abajo, en *Integrar el calendario*, copia el **ID del calendario**.
+5. **Cumpleaños:** en el calendario donde los apuntas (si es el principal, su ID es tu dirección de Gmail), compártelo igual con la cuenta de servicio, con permiso **Ver todos los detalles de los eventos**, y copia su ID.
+6. **Secrets** en `panel-data` (*Settings → Secrets and variables → Actions → New repository secret*):
+   - `GOOGLE_SA_KEY`: el **contenido entero** del archivo JSON descargado.
+   - `GCAL_NORA`: el ID del calendario «Nora».
+   - `GCAL_CUMPLES`: el ID del calendario de los cumpleaños.
+7. Pruébalo: **Actions → Google Calendar → Run workflow**. En el registro verás cuántos eventos ha creado y cuántos cumpleaños ha traído. Después **borra el archivo JSON** de Descargas (la clave ya está en los Secrets).
+8. En el iPhone, en el widget o la app de Google Calendar, comprueba que el calendario «Nora» está marcado para que se vea.
+
+Si Google no te deja crear la clave en el paso 3 (aviso de una «política de la organización»), cuéntamelo y lo vemos.
+
+## 7. No perder los datos
 
 - Con la sincronización activada, GitHub ya guarda todo y su historial. Inicio solo te avisa si lleva más de una semana sin sincronizar.
 - Cuando quieras una copia a mano (o sin sincronización): ⚙️ **Configuración → Exportar copia de seguridad** genera un `panel-AAAA-MM-DD.json` con todo. Guárdalo en iCloud Drive. Si hace más de un mes de la última, Inicio te lo recuerda. Para pasarlo a otro dispositivo: **Restaurar copia de seguridad**.
