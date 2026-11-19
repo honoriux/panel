@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.12';
+const APP_VERSION = 'panel-2026-11-19.13';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -1043,16 +1043,22 @@ document.addEventListener('change', ev => {
   if (t) changeActions[t.dataset.change]?.(t, ev);
 });
 
-// Deslizar a izquierda/derecha en el calendario para cambiar de mes (vista de mes) o de año (vista de año), como en Savey
+// Deslizar a izquierda/derecha, como en una app nativa:
+// - Calendario: cambia de mes (vista de mes) o de año (vista de año), como en Savey.
+// - Tareas: pasa al filtro siguiente o anterior (Todas, Personal, Trabajo, Periódicas).
+// - Dentro de una lista: hacia la derecha vuelve al resumen de Listas (como «‹ Listas»).
 let sx = null, sy = null;
 $('#view').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
 $('#view').addEventListener('touchend', e => {
   if (sx === null) return;
   const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
-  if (ui.tab !== 'trabajo' || !['mes', 'año'].includes(ui.vistaTrabajo) || sheets.length) return;
-  if (!(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5)) return;
-  if (ui.vistaTrabajo === 'mes') (dx < 0 ? mainActions.calNext : mainActions.calPrev)();
-  else (dx < 0 ? mainActions.calNextY : mainActions.calPrevY)();
+  if (sheets.length || !(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5)) return;
+  if (ui.tab === 'trabajo' && ui.vistaTrabajo === 'mes') (dx < 0 ? mainActions.calNext : mainActions.calPrev)();
+  else if (ui.tab === 'trabajo' && ui.vistaTrabajo === 'año') (dx < 0 ? mainActions.calNextY : mainActions.calPrevY)();
+  else if (ui.tab === 'tareas') {
+    const i = Math.max(0, FILTROS.findIndex(([k]) => k === ui.filtroTareas)), j = i + (dx < 0 ? 1 : -1);
+    if (j >= 0 && j < FILTROS.length) { ui.filtroTareas = FILTROS[j][0]; render(); }
+  } else if (ui.tab === 'listas' && ui.lista && dx > 0) mainActions.cerrarLista();
 }, { passive: true });
 
 function applyTheme() {
