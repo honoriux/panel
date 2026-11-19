@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.16';
+const APP_VERSION = 'panel-2026-11-19.17';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -585,7 +585,8 @@ function openAusForm(existing, preset = {}) {
   const isEdit = !!existing, y0 = db.trabajo['año'];
   const f = existing ? { ...existing, 'año': añoDe(existing), medio: !!existing.medio } : { tipo: 'vacaciones', nombre: '', desde: '', hasta: '', estado: 'por_pedir', 'año': y0, medio: false, ...preset };
   if (!TIPOS_AUS[f.tipo]) f.tipo = 'vacaciones';
-  const dateRow = (k, label) => `<div class="frow"><span>${label}</span><span class="v ${f[k] ? '' : 'ph'}">${f[k] ? `${DAYS[parseDia(f[k]).getDay()]}, ${fmtDia(f[k])}` : 'Seleccionar ›'}</span><input type="date" data-valor="${f[k] || ''}" data-on="${k}"></div>`;
+  // «Hasta» vacío lleva dentro la fecha de «Desde» (sin mostrarla): así su calendario se abre en ese día y no en hoy
+  const dateRow = (k, label) => `<div class="frow"><span>${label}</span><span class="v ${f[k] ? '' : 'ph'}">${f[k] ? `${DAYS[parseDia(f[k]).getDay()]}, ${fmtDia(f[k])}` : 'Seleccionar ›'}</span><input type="date" data-valor="${f[k] || (k === 'hasta' ? f.desde : '') || ''}" data-on="${k}"></div>`;
   // Medio día solo tiene sentido si es un único día
   const unDia = () => f.desde && (!f.hasta || f.hasta === f.desde);
   openSheet({
@@ -616,6 +617,7 @@ function openAusForm(existing, preset = {}) {
       desde: (t, s) => {
         f.desde = t.value; fechaEnSitio(t, s);
         if (f.hasta && (!f.desde || f.hasta < f.desde)) { f.hasta = ''; const h = s.el.querySelector('[data-on=hasta]'); if (h) fechaEnSitio(h, s, ''); }
+        const h = s.el.querySelector('[data-on=hasta]'); if (h && !f.hasta) h.value = f.desde || ''; // «Hasta» se abrirá en este día
       },
       hasta: (t, s) => {
         f.hasta = t.value; fechaEnSitio(t, s);

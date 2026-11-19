@@ -381,7 +381,7 @@ function viewAccounts() {
   const b = balances();
   return `<div class="networth"><div class="v">${money(netWorth())}</div><div class="small">Valor neto</div></div>
     ${db.accounts.map(a => `<button class="acard" data-act="editAcc" data-id="${a.id}"><div><div class="n">${esc(a.name)}${a.personal === false ? ' <span class="small">· no es tu dinero</span>' : ''}</div><div class="b">${money(b[a.id] || 0)}</div></div>
-      <span class="sq" style="background:${soft(a.color, .25)}">${a.icon}</span></button>`).join('')}
+      <span class="sq" style="background:${soft(a.color, .65)}">${a.icon}</span></button>`).join('')}
     <button class="addcard" data-act="newAcc">+ Toque para agregar una cuenta</button>
     <div style="margin-top:16px"><button class="btn blue" style="width:100%" data-act="newTransfer">⇄ Realizar una transferencia</button></div>`;
 }
@@ -598,7 +598,7 @@ function openAccountEdit(a) {
   openSheet({
     cls: 'full',
     render: () => `${head(isNew ? 'Nueva cuenta' : 'Editar cuenta')}
-      <div style="display:flex;justify-content:center;padding:10px">${ico(f, 'lg')}</div>
+      <div style="display:flex;justify-content:center;padding:10px"><span class="ico lg" style="background:${soft(f.color, .65)}">${f.icon}</span></div>
       <div class="field"><label>Nombre</label><input data-input="name" value="${esc(f.name)}" placeholder="Ej. Cuenta Principal"></div>
       <div class="field"><label>${isNew ? 'Saldo inicial' : 'Saldo actual'}</label><input data-input="bal" inputmode="decimal" value="${esc(f.bal)}"></div>
       ${isNew ? '' : '<div class="small" style="padding-top:6px">Si cambias el saldo actual se crea un movimiento de «Ajuste de saldo» por la diferencia (no cuenta como ingreso ni gasto).</div>'}
@@ -635,7 +635,7 @@ function openAccountEdit(a) {
 function openAccountsList() {
   openSheet({
     cls: 'full',
-    render: () => { const b = balances(); return `${head('Cuentas')}${db.accounts.map((a, i) => `<div style="display:flex;gap:6px;align-items:center"><button class="acard" style="flex:1" data-act="edit" data-id="${a.id}"><div><div class="n">${esc(a.name)}</div><div class="b">${money(b[a.id] || 0)}</div></div><span class="sq" style="background:${soft(a.color, .25)}">${a.icon}</span></button>
+    render: () => { const b = balances(); return `${head('Cuentas')}${db.accounts.map((a, i) => `<div style="display:flex;gap:6px;align-items:center"><button class="acard" style="flex:1" data-act="edit" data-id="${a.id}"><div><div class="n">${esc(a.name)}</div><div class="b">${money(b[a.id] || 0)}</div></div><span class="sq" style="background:${soft(a.color, .65)}">${a.icon}</span></button>
         <div style="display:flex;flex-direction:column;margin-bottom:12px"><button class="iconbtn" style="height:30px" data-act="up" data-i="${i}">▲</button><button class="iconbtn" style="height:30px" data-act="dn" data-i="${i}">▼</button></div></div>`).join('')}
       <button class="addcard" data-act="add">+ Toque para agregar una cuenta</button>
       <div class="form-foot"><button class="btn blue" data-act="transfer">⇄ Realizar una transferencia</button></div>`; },
