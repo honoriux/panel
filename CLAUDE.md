@@ -26,6 +26,7 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
     "festivos": { "2026": 3 },
     "ausencias": [{ "id": "", "u": 0, "tipo": "vacaciones|asuntos_propios|otro", "nombre": "", "desde": "", "hasta": "", "estado": "por_pedir|pedido|aprobado|disfrutado", "año": 2026, "medio": false }]
   },
+  "avisos": { "u": 0, "modo": "diario|hitos|personalizado", "hitos": [7, 1], "entrar": true, "vencidas": "diario|lunes|primer_dia" },
   "deleted": {}
 }
 ```
@@ -45,8 +46,11 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
    - Una ausencia aprobada cuya fecha ya pasó cuenta como disfrutada (sin cambiar el dato).
 4. **Gastos**: hasta la fase 6, resumen de solo lectura de `savey-data` (token de solo lectura; nunca escribe). En la fase 6 pasa a ser Savey entero (ver abajo).
 
-## Avisos (fase 5)
-La PWA no puede avisar en segundo plano. Habrá una GitHub Action diaria en `panel-data` (`.github/workflows/avisos.yml` + script Node sin dependencias) que lea `datos.json` y envíe por **WhatsApp con CallMeBot** (`api.callmebot.com/whatsapp.php`; número y `apikey` en Secrets) las tareas vencidas, las de hoy y las que entren en su `avisoDias`. El mensaje lleva solo títulos y fechas, nunca notas: es un servicio de terceros y Álvaro ha aceptado que ese texto pase por sus servidores.
+## Avisos por WhatsApp
+La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data` (no en este repo) lee `datos.json` y envía por **WhatsApp con CallMeBot** (`api.callmebot.com/whatsapp.php`; Secrets `CALLMEBOT_PHONE` y `CALLMEBOT_APIKEY`) un único mensaje con las tareas de hoy, las vencidas y las que están dentro de su `avisoDias`, solo si hay algo. El mensaje lleva solo títulos y fechas, nunca notas: es un servicio de terceros y Álvaro ha aceptado que ese texto pase por sus servidores.
+- Ficheros en `panel-data`: `.github/workflows/avisos.yml`, `scripts/avisos.mjs` (lee, decide la hora y envía) y `scripts/avisos-logica.mjs` (qué sale en el mensaje; sin dependencias, se puede probar en el navegador).
+- A las 7:00 de España: el cron corre a las 5:00 y 6:00 UTC y el script solo sigue en la que corresponde según el horario de verano (mira el cron que lo lanzó, no la hora real). `workflow_dispatch` = prueba (envía aunque no haya nada).
+- `avisos.modo` (Configuración → Avisos por WhatsApp): `diario` (vencidas y dentro de aviso, cada día), `hitos` (al entrar en su aviso, a 7 y a 1 día; vencidas el día siguiente y cada lunes) o `personalizado` (`hitos` = días antes, `entrar`, `vencidas`). Las de hoy salen siempre. La app y `avisos-logica.mjs` deben aplicar las mismas reglas.
 
 ## Integración de Savey (fase 6)
 - Una sola app. La pestaña **Gastos** es el **Inicio de Savey** (lo que Álvaro usa a diario: apuntar el gasto con el botón +). Un desplegable dentro de Gastos lleva al resto de pantallas de Savey (línea temporal, ideas, presupuestos, cuentas), siempre dentro de Gastos. Configuración tiene un apartado propio para Savey.
@@ -70,5 +74,5 @@ La PWA no puede avisar en segundo plano. Habrá una GitHub Action diaria en `pan
 3. ✅ Sync con `panel-data`.
 4. ✅ Gastos desde `savey-data` (solo lectura).
 5. ✅ Unificar tareas y caducidades.
-6. Avisos diarios por WhatsApp (CallMeBot) desde `panel-data`.
+6. ✅ Avisos diarios por WhatsApp (CallMeBot) desde `panel-data`.
 7. Integrar Savey dentro de Panel.

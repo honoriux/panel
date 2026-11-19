@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.8';
+const APP_VERSION = 'panel-2026-11-19.9';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -20,6 +20,8 @@ function defaultDB() {
     caducidades: [],
     tareas: [],
     trabajo: { u: 0, 'año': new Date().getFullYear(), vacacionesTotales: 24, ausencias: [] }, // 22 de vacaciones + 2 de libre disposición
+    // Configuración de los avisos por WhatsApp: la lee la Action diaria de panel-data (scripts/avisos.mjs)
+    avisos: { u: 0, modo: 'diario', hitos: [7, 1], entrar: true, vencidas: 'lunes' },
     deleted: {},
     // Ajustes locales del dispositivo: no se sincronizan
     settings: { theme: 'auto', lastBackup: null },
@@ -50,6 +52,7 @@ function normalize() {
   db.trabajo.ausencias = db.trabajo.ausencias.filter(a => a.tipo !== 'festivo_local' && a.tipo !== 'festivo_autonomico');
   // Los días pedidos cuentan para un año ("año"); si falta, el de su fecha de inicio
   for (const a of db.trabajo.ausencias) if (!a['año']) a['año'] = +a.desde.slice(0, 4);
+  db.avisos = Object.assign(d.avisos, db.avisos || {});
   db.deleted = db.deleted || {};
 }
 // Guarda un cambio hecho en este dispositivo: marca qué registros cambiaron (para sincronizar) y guarda.
@@ -64,12 +67,14 @@ function saveRaw() {
    y los borrados quedan en db.deleted. Así, cuando llegue la sincronización, no hará falta migrar nada. */
 const LISTS = [d => d.caducidades, d => d.tareas, d => d.trabajo.ausencias];
 const trabajoCab = () => { const { u, ausencias, ...rest } = db.trabajo; return JSON.stringify(rest); };
+const avisosCab = () => { const { u, ...rest } = db.avisos || {}; return JSON.stringify(rest); };
 let snap = new Map();
 const stripU = r => { const { u, ...rest } = r; return JSON.stringify(rest); };
 function takeSnap() {
   snap = new Map();
   for (const get of LISTS) for (const r of get(db)) snap.set(r.id, stripU(r));
   snap.set('__trabajo', trabajoCab());
+  snap.set('__avisos', avisosCab());
 }
 function stamp() {
   const now = Date.now(), seen = new Set();
@@ -77,8 +82,9 @@ function stamp() {
     seen.add(r.id);
     if (snap.get(r.id) !== stripU(r)) r.u = now;
   }
-  for (const id of snap.keys()) if (id !== '__trabajo' && !seen.has(id)) db.deleted[id] = now;
+  for (const id of snap.keys()) if (!id.startsWith('__') && !seen.has(id)) db.deleted[id] = now;
   if (snap.get('__trabajo') !== trabajoCab()) db.trabajo.u = now;
+  if (snap.get('__avisos') !== avisosCab()) db.avisos.u = now;
 }
 
 /* ---------------- Utilidades ---------------- */
@@ -730,6 +736,7 @@ function openSettings() {
       <button class="set-row" data-act="syncSetup"><span class="ic">⇅</span><span class="t">${sync?.token ? 'GitHub: ' + esc(sync.owner + '/' + sync.repo) : 'Sincronizar entre dispositivos'}<div class="small">${esc(syncStatus())}</div></span>›</button>
       ${sync?.token ? `<button class="set-row" data-act="syncNow"><span class="ic">⟳</span><span class="t">Sincronizar ahora</span></button>
         <button class="set-row" data-act="monthly"><span class="ic">🗓</span><span class="t">Copias mensuales en GitHub<div class="small">${sync.lastSnapshot ? 'Última: ' + esc(sync.lastSnapshot) : 'Se hará en la próxima sincronización'}</div></span>›</button>` : ''}
+      <button class="set-row" data-act="avisosSetup"><span class="ic">✉︎</span><span class="t">Avisos por WhatsApp<div class="small">${esc(MODOS_AVISO[db.avisos.modo]?.n || '')} · a las 7:00, si hay algo que avisar</div></span>›</button>
       <button class="set-row" data-act="gastosSetup"><span class="ic">€</span><span class="t">${gastosCfg?.token ? 'Gastos: ' + esc(gastosCfg.owner + '/' + gastosCfg.repo) : 'Conectar gastos de Savey'}<div class="small">${gastosCfg?.token ? 'Solo lectura' + (gastos ? ' · actualizado ' + haceTxt(gastos.actualizado) : '') : 'Desactivado'}</div></span>›</button>
       <div class="set-h">Datos</div>
       <button class="set-row" data-act="backup"><span class="ic">☁︎</span><span class="t">Exportar copia de seguridad<div class="small">Descarga un archivo con todo${st.lastBackup ? ' · última: ' + longDate(new Date(st.lastBackup)) : ''}</div></span>›</button>
@@ -742,6 +749,8 @@ function openSettings() {
     actions: {
       set: (t, s) => { st[t.dataset.k] = t.value; save(); s.refresh(); render(); },
       syncSetup: () => openSyncSetup(),
+      avisosSetup: () => openAvisos(),
+      gastosSetup: () => openGastosSetup(),
       syncNow: (t, s) => { const p = syncNow(); s.refresh(); p.then(() => toast(sync?.lastError ? 'Error al sincronizar' : 'Sincronizado')); },
       monthly: () => openMonthlyBackups(),
       backup: (t, s) => exportBackup().then(() => s.refresh()),
@@ -750,6 +759,43 @@ function openSettings() {
         if (!confirm(sync?.token ? 'Se borrarán TODOS los datos, también en GitHub y en el resto de dispositivos sincronizados. ¿Seguro?' : 'Se borrarán TODOS los datos de este dispositivo. ¿Seguro?')) return;
         if (!confirm('Última confirmación: ¿has hecho una copia de seguridad? Esta acción no se puede deshacer.')) return;
         db = { ...defaultDB(), settings: db.settings }; save(); s.close(); render(); toast('Datos restablecidos');
+      },
+    },
+  });
+}
+
+/* ---------------- Avisos por WhatsApp ----------------
+   Los envía cada día a las 7:00 una GitHub Action en panel-data (scripts/avisos.mjs) con CallMeBot.
+   Aquí solo se elige cuándo salen las tareas con aviso y las vencidas; las de hoy salen siempre. */
+const MODOS_AVISO = {
+  diario: { n: 'Todos los días', d: 'Las vencidas y las que están dentro de su aviso salen en el mensaje de cada día.' },
+  hitos: { n: 'Hitos', d: 'Las que se acercan salen el día que entran en su aviso, a 7 días y a 1 día. Las vencidas, el día siguiente a vencer y luego cada lunes.' },
+  personalizado: { n: 'Personalizado', d: 'Tú eliges en qué días antes avisar y cada cuánto recordar las vencidas.' },
+};
+const VENCIDAS_AVISO = { diario: 'Cada día', lunes: 'El día siguiente y cada lunes', primer_dia: 'Solo el día siguiente' };
+function openAvisos() {
+  const a = db.avisos, f = { modo: a.modo, hitosTxt: (a.hitos || []).join(', '), entrar: a.entrar !== false, vencidas: a.vencidas || 'lunes' };
+  openSheet({
+    cls: 'full',
+    render: () => `${head('Avisos por WhatsApp')}
+      <p class="small">Cada día a las 7:00 te llega un WhatsApp con las tareas de hoy, las vencidas y las que se acercan, si hay alguna. Solo lleva títulos y fechas, nunca notas. Lo envía GitHub desde panel-data con CallMeBot (se configura una vez, siguiendo el LEEME).</p>
+      <div class="seg lg" style="margin:10px 0">${Object.entries(MODOS_AVISO).map(([k, m]) => `<button class="${f.modo === k ? 'on' : ''}" data-act="modo" data-m="${k}">${m.n}</button>`).join('')}</div>
+      <p class="small">${MODOS_AVISO[f.modo].d}</p>
+      ${f.modo === 'personalizado' ? `
+        <div class="field"><label>Días antes en que avisar (separados por comas)</label><input data-input="hitos" inputmode="numeric" value="${esc(f.hitosTxt)}" placeholder="Ej. 30, 15, 7, 1"></div>
+        <button class="set-row" data-act="entrar"><span class="t">Avisar también el día que entra en su aviso</span><span class="switch ${f.entrar ? 'on' : ''}"></span></button>
+        <div class="frow"><span>Vencidas</span><span class="v">${VENCIDAS_AVISO[f.vencidas]} ›</span><select class="overlay" data-on="vencidas">${Object.entries(VENCIDAS_AVISO).map(([k, l]) => `<option value="${k}" ${k === f.vencidas ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}
+      <div class="form-foot"><button class="btn navy" data-act="save">Guardar</button></div>`,
+    actions: {
+      modo: (t, s) => { f.modo = t.dataset.m; s.refresh(); },
+      hitos: t => f.hitosTxt = t.value,
+      entrar: (t, s) => { f.entrar = !f.entrar; s.refresh(); },
+      vencidas: (t, s) => { f.vencidas = t.value; s.refresh(); },
+      save: (t, s) => {
+        const hitos = [...new Set(f.hitosTxt.split(/[^0-9]+/).filter(Boolean).map(Number).filter(n => n >= 1 && n <= 365))].sort((x, y) => y - x);
+        if (f.modo === 'personalizado' && !hitos.length && !f.entrar) return toast('Pon algún día o activa el aviso al entrar');
+        Object.assign(db.avisos, f.modo === 'personalizado' ? { modo: f.modo, hitos, entrar: f.entrar, vencidas: f.vencidas } : { modo: f.modo });
+        save(); s.close(); sheets.forEach(x => x.live && x.refresh()); toast('Avisos guardados');
       },
     },
   });
@@ -805,6 +851,7 @@ function backupBanner() {
 const mainActions = {
   tab: t => { ui.tab = t.dataset.tab; render(); window.scrollTo(0, 0); if (ui.tab === 'gastos') cargarGastos(); },
   gastosSetup: () => openGastosSetup(),
+  avisosSetup: () => openAvisos(),
   gastosRefresh: () => cargarGastos(true),
   settings: () => openSettings(),
   backup: () => exportBackup(),
@@ -885,16 +932,16 @@ const b64enc = s => {
 const b64dec = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, '')), c => c.charCodeAt(0)));
 
 // Lo que se sube a GitHub: los datos, sin los ajustes locales del dispositivo
-const syncPayload = d => ({ version: 1, caducidades: d.caducidades, tareas: d.tareas, trabajo: d.trabajo, deleted: d.deleted || {} });
+const syncPayload = d => ({ version: 1, caducidades: d.caducidades, tareas: d.tareas, trabajo: d.trabajo, avisos: d.avisos, deleted: d.deleted || {} });
 const esDePanel = d => d && Array.isArray(d.caducidades) && Array.isArray(d.tareas) && d.trabajo && Array.isArray(d.trabajo.ausencias);
 // Representación ordenada por id, para comparar contenidos sin que importe el orden
 function canon(d) {
   const p = syncPayload(d), byId = l => [...(l || [])].sort((a, b) => a.id < b.id ? -1 : 1);
   const { ausencias, ...cab } = p.trabajo || {};
-  return JSON.stringify({ c: byId(p.caducidades), t: byId(p.tareas), w: cab, a: byId(ausencias), d: Object.keys(p.deleted).sort().map(k => [k, p.deleted[k]]) });
+  return JSON.stringify({ c: byId(p.caducidades), t: byId(p.tareas), w: cab, a: byId(ausencias), v: p.avisos || null, d: Object.keys(p.deleted).sort().map(k => [k, p.deleted[k]]) });
 }
 // Combina registro a registro: gana la versión modificada más recientemente; los borrados se respetan.
-// La cabecera de Trabajo (año, días totales) gana entera según su "u".
+// La cabecera de Trabajo (año, días totales) y la configuración de avisos ganan enteras según su "u".
 function mergeData(L, R) {
   const del = { ...(R.deleted || {}) };
   for (const [id, t] of Object.entries(L.deleted || {})) del[id] = Math.max(del[id] || 0, t);
@@ -911,7 +958,8 @@ function mergeData(L, R) {
   };
   const Lt = L.trabajo || {}, Rt = R.trabajo || {};
   const { ausencias: _a, ...cab } = (Rt.u || 0) > (Lt.u || 0) ? Rt : Lt;
-  return { ...L, caducidades: mergeList(L.caducidades, R.caducidades), tareas: mergeList(L.tareas, R.tareas), trabajo: { ...cab, ausencias: mergeList(Lt.ausencias, Rt.ausencias) }, deleted: del };
+  const avisos = (R.avisos?.u || 0) > (L.avisos?.u || 0) ? R.avisos : L.avisos;
+  return { ...L, caducidades: mergeList(L.caducidades, R.caducidades), tareas: mergeList(L.tareas, R.tareas), trabajo: { ...cab, ausencias: mergeList(Lt.ausencias, Rt.ausencias) }, avisos, deleted: del };
 }
 
 async function gh(path, opts = {}, cfg = sync) {

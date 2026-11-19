@@ -57,7 +57,22 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 **En cada dispositivo:** pestaña **Gastos → Conectar con Savey** (o ⚙️ **Configuración → Conectar gastos de Savey**), con tu usuario, `savey-data` y ese token. Se actualiza al abrir la pestaña (como mucho cada 5 minutos) o con **⟳ Actualizar**, y guarda el último resumen para verlo sin conexión. El token y el resumen se quedan solo en el dispositivo: no van a `panel-data` ni a las copias.
 
-## 5. No perder los datos
+## 5. Avisos por WhatsApp
+
+Cada día a las 7:00 (hora de España) te llega un WhatsApp con las tareas de hoy, las vencidas y las que se acercan, **solo si hay algo**. Lleva únicamente títulos y fechas, nunca notas. Lo envía una GitHub Action de `panel-data` (`.github/workflows/avisos.yml` y `scripts/`) con [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/).
+
+Cuándo salen las tareas con aviso y las vencidas se elige en ⚙️ **Configuración → Avisos por WhatsApp**: *Todos los días*, *Hitos* (al entrar en su aviso, a 7 días y a 1 día; las vencidas, el día siguiente y cada lunes) o *Personalizado*. Las de hoy salen siempre.
+
+**Una sola vez:**
+1. Si no tienes ya tu `apikey` de CallMeBot: añade a tus contactos el número que indica su web, mándale por WhatsApp el mensaje de activación que pone allí y te contestará con tu `apikey`.
+2. En GitHub, en `panel-data`: **Settings → Secrets and variables → Actions → New repository secret**, y crea dos:
+   - `CALLMEBOT_PHONE`: tu número con prefijo y sin espacios ni `+`, por ejemplo `34600000000`.
+   - `CALLMEBOT_APIKEY`: tu `apikey`.
+3. Pruébalo: **Actions → Avisos por WhatsApp → Run workflow → Run workflow**. Te llega el mensaje de hoy marcado como «(prueba)», aunque no haya nada. Si desmarcas «Enviar», solo lo muestra en el registro sin mandarlo.
+
+Si un día no llega, mira en **Actions** si la ejecución salió en rojo: el registro dice si faltan los Secrets o si CallMeBot rechazó el mensaje.
+
+## 6. No perder los datos
 
 - Con la sincronización activada, GitHub ya guarda todo y su historial. Inicio solo te avisa si lleva más de una semana sin sincronizar.
 - Cuando quieras una copia a mano (o sin sincronización): ⚙️ **Configuración → Exportar copia de seguridad** genera un `panel-AAAA-MM-DD.json` con todo. Guárdalo en iCloud Drive. Si hace más de un mes de la última, Inicio te lo recuerda. Para pasarlo a otro dispositivo: **Restaurar copia de seguridad**.
