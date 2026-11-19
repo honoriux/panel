@@ -1064,7 +1064,7 @@ async function syncNow() {
     sync.lastError = e.message || String(e);
   } finally {
     syncing = false; saveSyncCfg();
-    if (changed) render(); else sheets.forEach(s => s.live && s.refresh());
+    if (changed) render(); else sheets.forEach(s => s.live && s.refreshLive());
     if (syncAgain) { syncAgain = false; scheduleSync(300); }
   }
 }

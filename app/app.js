@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.15';
+const APP_VERSION = 'panel-2026-11-19.16';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -176,7 +176,7 @@ function render() {
   $('#tabbar').innerHTML = TABS.map(t => `<button class="${t.k === tab.k ? 'on' : ''}" data-act="tab" data-tab="${t.k}">${t.icon}<span>${t.label}</span></button>`).join('');
   $('#fab').hidden = !tab.fab || (tab.k === 'listas' && !!ui.lista); // dentro de una lista se apunta en el campo de arriba
   $('#view').innerHTML = tab.view();
-  sheets.forEach(s => s.live && s.refresh());
+  sheets.forEach(s => s.live && s.refreshLive());
 }
 
 /* ---------------- Tareas (incluidas las periódicas: renovaciones, caducidades…) ----------------
@@ -790,6 +790,14 @@ function openSheet({ render, actions = {}, cls = '', onRender }) {
     s.needsRefresh = false; if (sheets.includes(s)) s.refresh();
   }, 60);
   s.later = () => { s.needsRefresh = true; };
+  /* Redibujado pedido desde fuera de la hoja (al terminar una sincronización, al redibujar la vista…): si hay un campo
+     con el foco o se está tocando la hoja, espera como s.later(). Así una sincronización que acaba mientras se elige
+     una fecha en iPhone no cierra el selector ni pone el día de hoy. */
+  s.refreshLive = () => {
+    const a = document.activeElement;
+    if (s.pointer || (a && s.el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return s.later();
+    s.refresh();
+  };
   s.el.addEventListener('focusout', tryRefresh);
   s.el.addEventListener('pointerdown', () => { s.pointer = true; });
   s.el.addEventListener('click', () => { s.pointer = false; tryRefresh(); });
@@ -842,7 +850,7 @@ async function comprobarVersion() {
 function openSettings() {
   const st = db.settings;
   nuevaVersion = null;
-  comprobarVersion().then(() => sheets.forEach(x => x.live && x.refresh()));
+  comprobarVersion().then(() => sheets.forEach(x => x.live && x.refreshLive()));
   const sel = (key, opts) => `<select data-on="set" data-k="${key}">${Object.entries(opts).map(([k, l]) => `<option value="${k}" ${st[key] === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   openSheet({
     cls: 'full',
@@ -927,7 +935,7 @@ function openAvisos() {
         const hitos = [...new Set(f.hitosTxt.split(/[^0-9]+/).filter(Boolean).map(Number).filter(n => n >= 1 && n <= 365))].sort((x, y) => y - x);
         if (f.modo === 'personalizado' && !hitos.length && !f.entrar) return toast('Pon algún día o activa el aviso al entrar');
         Object.assign(db.avisos, f.modo === 'personalizado' ? { modo: f.modo, hitos, entrar: f.entrar, vencidas: f.vencidas } : { modo: f.modo }, { hora: f.hora, sinFecha: f.sinFecha });
-        save(); s.close(); render(); sheets.forEach(x => x.live && x.refresh()); toast('Avisos guardados');
+        save(); s.close(); render(); sheets.forEach(x => x.live && x.refreshLive()); toast('Avisos guardados');
       },
     },
   });
@@ -1228,7 +1236,7 @@ async function syncNow() {
     sync.lastError = e.message || String(e);
   } finally {
     syncing = false; saveSyncCfg();
-    if (changed || bannerAntes !== avisosBanner()) render(); else sheets.forEach(s => s.live && s.refresh());
+    if (changed || bannerAntes !== avisosBanner()) render(); else sheets.forEach(s => s.live && s.refreshLive());
     if (syncAgain) { syncAgain = false; scheduleSync(300); }
   }
 }

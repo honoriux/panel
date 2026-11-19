@@ -75,7 +75,7 @@ La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data
 - La app solo envía datos a la API de GitHub. La única excepción es la Action de avisos (fase 5) con CallMeBot.
 - `.gitignore`: nada de datos ni tokens en el repo de la app. La app es pública en Pages y los datos solo viven en los repos privados.
 - En cada cambio publicado, cambia `CACHE` en `sw.js` y `APP_VERSION` en `app.js` (siempre iguales) a `panel-AAAA-MM-DD.N`: fecha de publicación y nº de publicación de ese día (1, 2…). La versión se ve en Configuración → Acerca de como `dd/mm/aaaa · N`.
-- En iPhone, nunca redibujar una hoja mientras un campo de fecha tiene el foco (Safari pone hoy al abrir el selector y lo cierra): usar `fechaEnSitio` + `s.later()`.
+- En iPhone, nunca redibujar una hoja mientras un campo de fecha tiene el foco (Safari pone hoy al abrir el selector y lo cierra): usar `fechaEnSitio` + `s.later()`. Los redibujados que vienen de fuera de la hoja (fin de una sincronización, `render()`…) usan siempre `s.refreshLive()`, que espera si hay un campo con el foco o se está tocando la hoja.
 
 ## Fases
 1. ✅ Esqueleto PWA + Caducidades + Inicio.
