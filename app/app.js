@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.9';
+const APP_VERSION = 'panel-2026-11-19.10';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -21,7 +21,7 @@ function defaultDB() {
     tareas: [],
     trabajo: { u: 0, 'año': new Date().getFullYear(), vacacionesTotales: 24, ausencias: [] }, // 22 de vacaciones + 2 de libre disposición
     // Configuración de los avisos por WhatsApp: la lee la Action diaria de panel-data (scripts/avisos.mjs)
-    avisos: { u: 0, modo: 'diario', hitos: [7, 1], entrar: true, vencidas: 'lunes' },
+    avisos: { u: 0, modo: 'diario', hitos: [7, 1], entrar: true, vencidas: 'lunes', hora: 7 },
     deleted: {},
     // Ajustes locales del dispositivo: no se sincronizan
     settings: { theme: 'auto', lastBackup: null },
@@ -273,7 +273,7 @@ function viewHome() {
   const y = new Date().getFullYear(), conDatos = a => db.trabajo.ausencias.some(x => añoDe(x) === a || x.desde.startsWith(String(a)));
   const dias = [y - 1, y].filter(a => a === y ? (conDatos(a) || db.trabajo.vacacionesTotales) : conDatos(a) && contadorDias(a).restantes > 0);
   const libres = dias.length ? `<h2 class="sec">Días libres</h2>${dias.map(a => tarjetaDias(a, true)).join('')}` : '';
-  return `${backupBanner()}${pend}${libres}`;
+  return `${backupBanner()}${avisosBanner()}${pend}${libres}`;
 }
 
 function openTareaForm(existing, preset = {}) {
@@ -736,7 +736,7 @@ function openSettings() {
       <button class="set-row" data-act="syncSetup"><span class="ic">⇅</span><span class="t">${sync?.token ? 'GitHub: ' + esc(sync.owner + '/' + sync.repo) : 'Sincronizar entre dispositivos'}<div class="small">${esc(syncStatus())}</div></span>›</button>
       ${sync?.token ? `<button class="set-row" data-act="syncNow"><span class="ic">⟳</span><span class="t">Sincronizar ahora</span></button>
         <button class="set-row" data-act="monthly"><span class="ic">🗓</span><span class="t">Copias mensuales en GitHub<div class="small">${sync.lastSnapshot ? 'Última: ' + esc(sync.lastSnapshot) : 'Se hará en la próxima sincronización'}</div></span>›</button>` : ''}
-      <button class="set-row" data-act="avisosSetup"><span class="ic">✉︎</span><span class="t">Avisos por WhatsApp<div class="small">${esc(MODOS_AVISO[db.avisos.modo]?.n || '')} · a las 7:00, si hay algo que avisar</div></span>›</button>
+      <button class="set-row" data-act="avisosSetup"><span class="ic">✉︎</span><span class="t">Avisos por WhatsApp<div class="small">${esc(MODOS_AVISO[db.avisos.modo]?.n || '')} · a las ${horaTxt(db.avisos.hora)}${(e => e ? `<br><span class="${e.nivel === 'ok' ? '' : 'red'}">${esc(e.texto)}</span>` : '')(estadoAvisos())}</div></span>›</button>
       <button class="set-row" data-act="gastosSetup"><span class="ic">€</span><span class="t">${gastosCfg?.token ? 'Gastos: ' + esc(gastosCfg.owner + '/' + gastosCfg.repo) : 'Conectar gastos de Savey'}<div class="small">${gastosCfg?.token ? 'Solo lectura' + (gastos ? ' · actualizado ' + haceTxt(gastos.actualizado) : '') : 'Desactivado'}</div></span>›</button>
       <div class="set-h">Datos</div>
       <button class="set-row" data-act="backup"><span class="ic">☁︎</span><span class="t">Exportar copia de seguridad<div class="small">Descarga un archivo con todo${st.lastBackup ? ' · última: ' + longDate(new Date(st.lastBackup)) : ''}</div></span>›</button>
@@ -765,7 +765,7 @@ function openSettings() {
 }
 
 /* ---------------- Avisos por WhatsApp ----------------
-   Los envía cada día a las 7:00 una GitHub Action en panel-data (scripts/avisos.mjs) con CallMeBot.
+   Los envía cada día, a la hora elegida (avisos.hora), una GitHub Action en panel-data (scripts/avisos.mjs) con CallMeBot.
    Aquí solo se elige cuándo salen las tareas con aviso y las vencidas; las de hoy salen siempre. */
 const MODOS_AVISO = {
   diario: { n: 'Todos los días', d: 'Las vencidas y las que están dentro de su aviso salen en el mensaje de cada día.' },
@@ -774,11 +774,20 @@ const MODOS_AVISO = {
 };
 const VENCIDAS_AVISO = { diario: 'Cada día', lunes: 'El día siguiente y cada lunes', primer_dia: 'Solo el día siguiente' };
 function openAvisos() {
-  const a = db.avisos, f = { modo: a.modo, hitosTxt: (a.hitos || []).join(', '), entrar: a.entrar !== false, vencidas: a.vencidas || 'lunes' };
+  const a = db.avisos, f = { modo: a.modo, hitosTxt: (a.hitos || []).join(', '), entrar: a.entrar !== false, vencidas: a.vencidas || 'lunes', hora: a.hora ?? 7 };
+  const estado = () => {
+    const e = estadoAvisos();
+    if (!e) return '';
+    const actions = sync?.token ? `https://github.com/${encodeURIComponent(sync.owner)}/${encodeURIComponent(sync.repo)}/actions` : '';
+    return `<div class="${e.nivel === 'ok' ? 'small' : 'banner'}" style="margin:10px 0">${e.nivel === 'ok' ? '' : '⚠️ '}<span>${esc(e.texto)}${e.nivel !== 'ok' && actions ? ` Mira el registro en <a href="${actions}" target="_blank" rel="noopener">Actions de ${esc(sync.repo)}</a>.` : ''}</span></div>`;
+  };
   openSheet({
     cls: 'full',
     render: () => `${head('Avisos por WhatsApp')}
-      <p class="small">Cada día a las 7:00 te llega un WhatsApp con las tareas de hoy, las vencidas y las que se acercan, si hay alguna. Solo lleva títulos y fechas, nunca notas. Lo envía GitHub desde panel-data con CallMeBot (se configura una vez, siguiendo el LEEME).</p>
+      <p class="small">Cada día a la hora que elijas te llega un WhatsApp con las tareas de hoy, las vencidas y las que se acercan, si hay alguna. Solo lleva títulos y fechas, nunca notas. Lo envía GitHub desde panel-data con CallMeBot (se configura una vez, siguiendo el LEEME).</p>
+      ${estado()}
+      <div class="frow"><span>Hora</span><span class="v">${horaTxt(f.hora)} ›</span><select class="overlay" data-on="hora">${Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === f.hora ? 'selected' : ''}>${horaTxt(h)}</option>`).join('')}</select></div>
+      <p class="small">GitHub suele lanzarlo con unos minutos de retraso. Si un intento falla, lo repite cada hora ese mismo día.</p>
       <div class="seg lg" style="margin:10px 0">${Object.entries(MODOS_AVISO).map(([k, m]) => `<button class="${f.modo === k ? 'on' : ''}" data-act="modo" data-m="${k}">${m.n}</button>`).join('')}</div>
       <p class="small">${MODOS_AVISO[f.modo].d}</p>
       ${f.modo === 'personalizado' ? `
@@ -791,11 +800,12 @@ function openAvisos() {
       hitos: t => f.hitosTxt = t.value,
       entrar: (t, s) => { f.entrar = !f.entrar; s.refresh(); },
       vencidas: (t, s) => { f.vencidas = t.value; s.refresh(); },
+      hora: (t, s) => { f.hora = +t.value; s.refresh(); },
       save: (t, s) => {
         const hitos = [...new Set(f.hitosTxt.split(/[^0-9]+/).filter(Boolean).map(Number).filter(n => n >= 1 && n <= 365))].sort((x, y) => y - x);
         if (f.modo === 'personalizado' && !hitos.length && !f.entrar) return toast('Pon algún día o activa el aviso al entrar');
-        Object.assign(db.avisos, f.modo === 'personalizado' ? { modo: f.modo, hitos, entrar: f.entrar, vencidas: f.vencidas } : { modo: f.modo });
-        save(); s.close(); sheets.forEach(x => x.live && x.refresh()); toast('Avisos guardados');
+        Object.assign(db.avisos, f.modo === 'personalizado' ? { modo: f.modo, hitos, entrar: f.entrar, vencidas: f.vencidas } : { modo: f.modo }, { hora: f.hora });
+        save(); s.close(); render(); sheets.forEach(x => x.live && x.refresh()); toast('Avisos guardados');
       },
     },
   });
@@ -1047,7 +1057,7 @@ async function syncNow() {
   clearTimeout(syncTimer); syncTimer = null;
   if (!sync?.token || !navigator.onLine) return;
   if (syncing) { syncAgain = true; return; }
-  syncing = true; let changed = false;
+  syncing = true; let changed = false; const bannerAntes = avisosBanner();
   try {
     for (let attempt = 0; ; attempt++) {
       const { sha, data } = await pullRemote();
@@ -1062,15 +1072,48 @@ async function syncNow() {
       throw new Error(ghError(res));
     }
     sync.lastSync = new Date().toISOString(); sync.lastError = null;
+    await leerEstadoAvisos();
     await monthlySnapshot();
   } catch (e) {
     sync.lastError = e.message || String(e);
   } finally {
     syncing = false; saveSyncCfg();
-    if (changed) render(); else sheets.forEach(s => s.live && s.refresh());
+    if (changed || bannerAntes !== avisosBanner()) render(); else sheets.forEach(s => s.live && s.refresh());
     if (syncAgain) { syncAgain = false; scheduleSync(300); }
   }
 }
+/* Resultado de los avisos por WhatsApp: la Action de panel-data lo guarda en avisos-estado.json en cada intento.
+   Se lee (solo lectura) al sincronizar y se guarda aparte en este dispositivo: no forma parte de los datos. */
+const AVISOS_ESTADO_KEY = 'panel.avisos.estado';
+let avisosEstado = null; // { leido: ISO, data: { programado, prueba } | null }
+try { avisosEstado = JSON.parse(localStorage.getItem(AVISOS_ESTADO_KEY)); } catch (e) { }
+async function leerEstadoAvisos() {
+  try {
+    const { text } = await getFile('avisos-estado.json');
+    avisosEstado = { leido: new Date().toISOString(), data: text ? JSON.parse(text) : null };
+    localStorage.setItem(AVISOS_ESTADO_KEY, JSON.stringify(avisosEstado));
+  } catch (e) { } // si no se puede leer, se queda el último conocido
+}
+// Situación del último aviso programado: null (no hay datos), ok, error o falta (pasada la hora no consta ninguno)
+function estadoAvisos() {
+  const p = avisosEstado?.data?.programado;
+  if (!sync?.token || !p) return null;
+  const hora = db.avisos.hora ?? 7, ahora = new Date();
+  // Con margen de 2 horas por los retrasos de GitHub; si aún no ha pasado, se espera el de ayer
+  const esperado = ahora.getHours() >= hora + 2 ? hoy() : dayKey(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - 1));
+  const [y, m, d] = esperado.split('-').map(Number), limite = new Date(y, m - 1, d, hora + 2);
+  const cuando = `${p.fecha === hoy() ? 'hoy' : 'el ' + fmtDia(p.fecha).slice(0, 5)}${p.hora ? ' a las ' + new Date(p.hora).toTimeString().slice(0, 5) : ''}`;
+  if (!p.ok) return { nivel: 'error', fecha: p.fecha, texto: `Falló ${cuando}${p.intentos > 1 ? ` (${p.intentos} intentos)` : ''}: ${(p.detalle || 'error desconocido').replace(/([^.!?])$/, '$1.')}` };
+  if (p.fecha < esperado && new Date(avisosEstado.leido) >= limite) return { nivel: 'falta', fecha: esperado, texto: `No consta el aviso del ${fmtDia(esperado).slice(0, 5)}. El último fue ${cuando}.` };
+  return { nivel: 'ok', texto: `Último: ${cuando} · ${p.detalle === 'Enviado' ? 'enviado ✓' : (p.detalle || 'bien').toLowerCase() + ' ✓'}` };
+}
+function avisosBanner() {
+  const e = estadoAvisos();
+  if (!e || e.nivel === 'ok') return '';
+  return `<button class="banner" data-act="avisosSetup">⚠️ <span>${e.nivel === 'error' ? 'No se ha podido enviar el aviso de WhatsApp.' : `El aviso de WhatsApp del ${fmtDia(e.fecha).slice(0, 5)} no se ha llegado a ejecutar.`} <b>Toca para revisarlo.</b></span></button>`;
+}
+const horaTxt = h => `${String(h ?? 7).padStart(2, '0')}:00`;
+
 function syncStatus() {
   if (!sync?.token) return 'Desactivada';
   if (syncing) return 'Sincronizando…';

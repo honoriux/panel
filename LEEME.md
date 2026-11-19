@@ -59,9 +59,9 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 ## 5. Avisos por WhatsApp
 
-Cada día a las 7:00 (hora de España) te llega un WhatsApp con las tareas de hoy, las vencidas y las que se acercan, **solo si hay algo**. Lleva únicamente títulos y fechas, nunca notas. Lo envía una GitHub Action de `panel-data` (`.github/workflows/avisos.yml` y `scripts/`) con [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/).
+Cada día a la hora que elijas (por defecto, las 7:00 de España) te llega un WhatsApp con las tareas de hoy, las vencidas y las que se acercan, **solo si hay algo**. Lleva únicamente títulos y fechas, nunca notas. Lo envía una GitHub Action de `panel-data` (`.github/workflows/avisos.yml` y `scripts/`) con [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/).
 
-Cuándo salen las tareas con aviso y las vencidas se elige en ⚙️ **Configuración → Avisos por WhatsApp**: *Todos los días*, *Hitos* (al entrar en su aviso, a 7 días y a 1 día; las vencidas, el día siguiente y cada lunes) o *Personalizado*. Las de hoy salen siempre.
+La hora y cuándo salen las tareas con aviso y las vencidas se eligen en ⚙️ **Configuración → Avisos por WhatsApp**: *Todos los días*, *Hitos* (al entrar en su aviso, a 7 días y a 1 día; las vencidas, el día siguiente y cada lunes) o *Personalizado*. Las de hoy salen siempre.
 
 **Una sola vez:**
 1. Si no tienes ya tu `apikey` de CallMeBot: añade a tus contactos el número que indica su web, mándale por WhatsApp el mensaje de activación que pone allí y te contestará con tu `apikey`.
@@ -70,7 +70,7 @@ Cuándo salen las tareas con aviso y las vencidas se elige en ⚙️ **Configura
    - `CALLMEBOT_APIKEY`: tu `apikey`.
 3. Pruébalo: **Actions → Avisos por WhatsApp → Run workflow → Run workflow**. Te llega el mensaje de hoy marcado como «(prueba)», aunque no haya nada. Si desmarcas «Enviar», solo lo muestra en el registro sin mandarlo.
 
-Si un día no llega, mira en **Actions** si la ejecución salió en rojo: el registro dice si faltan los Secrets o si CallMeBot rechazó el mensaje.
+GitHub lo lanza cada hora con unos minutos de retraso; si un envío falla, lo reintenta cada hora ese mismo día. Si al final no se ha podido enviar (o no se ha llegado a ejecutar), Panel lo dice con un aviso ⚠️ en Inicio y en Configuración → Avisos por WhatsApp. El motivo está en el registro de **Actions** de `panel-data` (por ejemplo, si faltan los Secrets o CallMeBot rechazó el mensaje). Cada aviso guarda su resultado en `avisos-estado.json`, así que `panel-data` tiene un commit automático al día.
 
 ## 6. No perder los datos
 
