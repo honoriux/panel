@@ -22,12 +22,19 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.reintento.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: app
+      # A veces GitHub no encuentra aún el paquete recién subido («No artifacts named github-pages»): se reintenta una vez
       - id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - if: steps.deployment.outcome == 'failure'
+        run: sleep 20
+      - id: reintento
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
