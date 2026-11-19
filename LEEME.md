@@ -84,7 +84,7 @@ GitHub lo lanza cada hora con unos minutos de retraso; si un envío falla, lo re
 
 Cada hora (en la misma ejecución que los avisos), `panel-data` sincroniza con tu Google Calendar:
 - **Nora → Google:** los días libres (vacaciones, libre disposición y otros, con su estado: «(pedido)», «(por pedir)») y las tareas pendientes con fecha aparecen en un calendario propio llamado **Nora**, como eventos de día completo. Lo pasado no sale. Solo títulos y fechas, nunca notas. Ese calendario lo lleva Nora: lo que cambies o crees allí a mano se sobrescribe o se borra.
-- **Google → Nora:** los cumpleaños de tus Contactos (o los eventos que se repiten **cada año** de un calendario propio de cumpleaños) pasan a Nora como tareas periódicas 🎂 con aviso 7 días antes (salen en Inicio y en el WhatsApp). Si cambias el nombre o el día en Google, se actualiza; si lo quitas de Google, se quita de Nora; si lo borras en Nora, no vuelve. Cámbialos en Google, no en Nora.
+- **Google → Nora:** los eventos que se repiten **cada año** de un calendario aparte «Cumpleaños» pasan a Nora como tareas periódicas 🎂 con aviso 7 días antes (salen en Inicio y en el WhatsApp). Si cambias el nombre o el día en Google, se actualiza; si lo quitas de Google, se quita de Nora; si lo borras en Nora, no vuelve. Cámbialos en Google, no en Nora.
 
 Los cambios tardan como mucho una hora en llegar (si tienes prisa: **Actions → Google Calendar → Run workflow**).
 
@@ -93,11 +93,11 @@ Los cambios tardan como mucho una hora en llegar (si tienes prisa: **Actions →
 2. **Activa la API:** *APIs y servicios → Biblioteca →* **Google Calendar API** → *Habilitar*.
 3. **Cuenta de servicio** (el «usuario robot» de Nora): *IAM y administración → Cuentas de servicio → Crear cuenta de servicio*, nombre `nora`, sin roles → *Listo*. Ábrela → *Claves → Agregar clave → Crear clave nueva → JSON*: se descarga un archivo. Copia también su correo (`nora@….iam.gserviceaccount.com`).
 4. **Calendario «Nora»:** en [Google Calendar](https://calendar.google.com) (en el ordenador) → *Otros calendarios → + → Crear calendario* → «Nora». En su *Configuración y uso compartido*: *Compartir con determinadas personas → Añadir* el correo de la cuenta de servicio con permiso **Hacer cambios en eventos**. Más abajo, en *Integrar el calendario*, copia el **ID del calendario**.
-5. **Cumpleaños:** el calendario «Cumpleaños» de Google sale de Contactos y no se puede compartir, pero Google los pone también en tu calendario principal (el que lleva tu nombre). Comparte **ese** con la cuenta de servicio, con permiso **Ver todos los detalles de los eventos**: Nora solo coge de ahí los cumpleaños, nada más. Su ID es tu dirección de Gmail. (Si los apuntas en un calendario creado aparte, comparte ese y usa su ID: entonces se traen todos sus eventos anuales.)
+5. **Cumpleaños:** el calendario «Cumpleaños» de Google sale de Contactos y la cuenta de servicio no puede verlo (tampoco compartiendo tu calendario principal: probado). Crea otro calendario, por ejemplo «Cumples», compártelo con la cuenta de servicio con permiso **Ver todos los detalles de los eventos**, copia su ID y apunta en él cada cumpleaños como evento de día completo que se repite **cada año**.
 6. **Secrets** en `panel-data` (*Settings → Secrets and variables → Actions → New repository secret*):
    - `GOOGLE_SA_KEY`: el **contenido entero** del archivo JSON descargado.
    - `GCAL_NORA`: el ID del calendario «Nora».
-   - `GCAL_CUMPLES`: tu dirección de Gmail (o el ID del calendario aparte de cumpleaños).
+   - `GCAL_CUMPLES`: el ID del calendario de cumpleaños (acaba en `@group.calendar.google.com`).
 7. Pruébalo: **Actions → Google Calendar → Run workflow**. En el registro verás cuántos eventos ha creado y cuántos cumpleaños ha traído. Después **borra el archivo JSON** de Descargas (la clave ya está en los Secrets).
 8. En el iPhone, en el widget o la app de Google Calendar, comprueba que el calendario «Nora» está marcado para que se vea.
 
