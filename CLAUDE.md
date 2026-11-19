@@ -2,10 +2,10 @@
 
 PWA personal de Álvaro para tener centralizadas las tareas (también las periódicas: renovaciones y lo que caduca), el trabajo (pendientes, vacaciones y festivos) y los gastos (Savey). No es un panel para mirar a diario, salvo los gastos: se consulta cuando hace falta y avisa cuando algo se acerca.
 
-Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey ios app`): misma arquitectura, mismo estilo de código, mismo sistema de sincronización. Antes de escribir código, lee `app.js` de Savey y reutiliza sus piezas (sync con GitHub, merge por registro, service worker, hojas/sheets, toasts) en lugar de reinventarlas. En la fase 6, Savey se integra dentro de Panel.
+Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey ios app`): misma arquitectura, mismo estilo de código, mismo sistema de sincronización. Antes de escribir código, lee `app.js` de Savey y reutiliza sus piezas (sync con GitHub, merge por registro, service worker, hojas/sheets, toasts) en lugar de reinventarlas. Desde la fase 7, Savey vive dentro de Panel en `app/savey.js`: los cambios de gastos se hacen ahí.
 
 ## Arquitectura (no cambiar sin preguntar)
-- HTML + CSS + JS vanilla, sin frameworks ni build. La app está en `app/` (`index.html`, `styles.css`, `app.js`, `sw.js`, `manifest.webmanifest`, `icons/`).
+- HTML + CSS + JS vanilla, sin frameworks ni build. La app está en `app/` (`index.html`, `styles.css`, `app.js`, `savey.js`, `sw.js`, `manifest.webmanifest`, `icons/`). `savey.js` se carga antes que `app.js`.
 - Repo público `honoriux/panel`. Una GitHub Action (`.github/workflows/pages.yml`) publica solo `app/` en GitHub Pages (`honoriux.github.io/panel/`) en cada push a `main`. Se instala como PWA en iPhone y Windows.
 - Git está instalado y autenticado en este equipo: los cambios se publican con commit + push (autor `honoriux <honoriux@users.noreply.github.com>`, configurado solo en este repo).
 - Datos en `localStorage` y sincronizados con un **repo privado** de GitHub (`panel-data`, fichero `datos.json`) mediante la API de contents y un token fine-grained que se guarda solo en el dispositivo (clave aparte, nunca en copias).
@@ -48,7 +48,7 @@ Orden de las pestañas, de izquierda a derecha: Tareas, Listas, Inicio, Gastos, 
    - Los antiguos `festivo_local` / `festivo_autonomico` como fechas se eliminan al cargar (marcados en `deleted`).
    - Días laborables = lunes a viernes sin fiestas nacionales comunes de España (fijas más Viernes Santo calculado) ni los días de empresa (24 y 31 de diciembre).
    - Una ausencia aprobada cuya fecha ya pasó cuenta como disfrutada (sin cambiar el dato).
-5. **Gastos**: hasta la fase 6, resumen de solo lectura de `savey-data` (token de solo lectura; nunca escribe). En la fase 6 pasa a ser Savey entero (ver abajo).
+5. **Gastos**: Savey entero (ver «Savey dentro de Panel»).
 
 ## Avisos por WhatsApp
 La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data` (no en este repo) lee `datos.json` y envía por **WhatsApp con CallMeBot** (`api.callmebot.com/whatsapp.php`; Secrets `CALLMEBOT_PHONE` y `CALLMEBOT_APIKEY`) un único mensaje con las tareas de hoy, las vencidas y las que están dentro de su `avisoDias`, solo si hay algo. El mensaje lleva solo títulos y fechas, nunca notas: es un servicio de terceros y Álvaro ha aceptado que ese texto pase por sus servidores.
@@ -57,10 +57,13 @@ La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data
 - Estado: cada intento que toca se guarda en `avisos-estado.json` de `panel-data` (`{ programado: { fecha, hora, ok, detalle, intentos }, prueba: {…} }`) con el `GITHUB_TOKEN` de la Action. La app lo lee al sincronizar (solo lectura, guardado aparte en `panel.avisos.estado`) y muestra el banner ⚠️ en Inicio si el último falló o si, 2 horas después de la hora, no consta el aviso del día; el resultado se ve también en Configuración → Avisos por WhatsApp.
 - `avisos.modo` (Configuración → Avisos por WhatsApp): `diario` (vencidas y dentro de aviso, cada día), `hitos` (al entrar en su aviso, a 7 y a 1 día; vencidas el día siguiente y cada lunes) o `personalizado` (`hitos` = días antes, `entrar`, `vencidas`). Las de hoy salen siempre. Las tareas sin fecha van en una sección aparte al final según `avisos.sinFecha` (por defecto `lunes`; también `diario` o `nunca`), en cualquier modo. La app y `avisos-logica.mjs` deben aplicar las mismas reglas.
 
-## Integración de Savey (fase 6)
-- Una sola app. La pestaña **Gastos** es el **Inicio de Savey** (lo que Álvaro usa a diario: apuntar el gasto con el botón +). Un desplegable dentro de Gastos lleva al resto de pantallas de Savey (línea temporal, ideas, presupuestos, cuentas), siempre dentro de Gastos. Configuración tiene un apartado propio para Savey.
-- Los datos siguen separados: Savey en `savey-data` (con su propio token de lectura y escritura) y Panel en `panel-data`. La migración es conectar `savey-data` desde la app nueva.
-- La app SaveyCustom actual se mantiene instalada y funcionando hasta que la integrada esté probada.
+## Savey dentro de Panel (fase 7)
+- Una sola app. La pestaña **Gastos** es el **Inicio de Savey** (lo que Álvaro usa a diario: apuntar el gasto con el botón +). Arriba, el mes (‹ ›, tocarlo vuelve al actual, deslizar cambia de mes) y el menú **☰**, que lleva al resto de pantallas de Savey (Inicio, Línea temporal, Ideas, Presupuestos, Cuentas) más Recurrente, Editar cuentas y Categorías, siempre dentro de Gastos. Configuración tiene un apartado propio, **Savey**.
+- `app/savey.js` es el código de SaveyCustom dentro de un cierre (`const Savey = (() => { … })()`), para que sus nombres (`db`, `ui`, `render`, `sync`…) no choquen con los de Panel. Usa las hojas (`openSheet`/`closeSheet`, con la clase `.sv`), `toast` y el tema de Panel; Panel le pide `Savey.view()`, `Savey.top()` (barra de arriba), `Savey.nuevo()` (botón +), `Savey.swipe()`, `Savey.actions` (en Gastos, las acciones de la vista son las de Savey salvo la barra de pestañas y la rueda) y los ganchos `alVolver`/`alOcultar`/`sincronizar`.
+- Estilos de Savey al final de `styles.css`; los que en Panel tienen el mismo nombre y otro aspecto (`.bar`, `.bcard`, `.brow`, `.accsel`) van bajo `.sv`.
+- Los datos siguen separados: Savey en `savey-data` (claves del dispositivo `panel.savey.db`, `panel.savey.sync`, `panel.savey.ui`; su propio token de **lectura y escritura**) y Panel en `panel-data`. No conecta si el repositorio es público, si es `panel-data` o si su `datos.json` no es de Savey. Al conectar sin movimientos en el dispositivo, usa directamente los de GitHub. Sus copias de seguridad y el CSV son los mismos que los de SaveyCustom.
+- Los recurrentes generan sus movimientos con id determinista (`<idRecurrente>_<fecha>`): SaveyCustom y Panel pueden funcionar a la vez sobre `savey-data` sin duplicar nada.
+- La app SaveyCustom actual se mantiene instalada y funcionando hasta que Álvaro dé por buena la integrada.
 
 ## Reglas de trabajo
 - Responder siempre en español.
@@ -77,7 +80,7 @@ La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data
 1. ✅ Esqueleto PWA + Caducidades + Inicio.
 2. ✅ Tareas y Trabajo (con calendario laboral).
 3. ✅ Sync con `panel-data`.
-4. ✅ Gastos desde `savey-data` (solo lectura).
+4. ✅ Gastos desde `savey-data` (solo lectura; sustituido en la fase 7).
 5. ✅ Unificar tareas y caducidades.
 6. ✅ Avisos diarios por WhatsApp (CallMeBot) desde `panel-data`.
-7. Integrar Savey dentro de Panel.
+7. ✅ Integrar Savey dentro de Panel (pendiente: conectar `savey-data` en cada dispositivo y retirar SaveyCustom cuando esté probada).

@@ -12,6 +12,8 @@
   --warn: #f0b341;
   --transfer: #5b8def;
   --navy: #1f2a44;
+  --keypad: #d4d6dc; /* teclado numérico de Savey */
+  --key: #ffffff;
   --shadow: 0 1px 3px rgba(40, 30, 30, .08);
   --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
@@ -22,12 +24,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #17181c; --card: #212228; --text: #ecebed; --muted: #8e909a; --line: #2e3038;
-    --accent-soft: #4a2a2d; --income-soft: #24402a; --navy: #3a4a74; --shadow: none; color-scheme: dark;
+    --accent-soft: #4a2a2d; --income-soft: #24402a; --navy: #3a4a74;
+    --keypad: #2a2b31; --key: #45464e; --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #17181c; --card: #212228; --text: #ecebed; --muted: #8e909a; --line: #2e3038;
-  --accent-soft: #4a2a2d; --income-soft: #24402a; --navy: #3a4a74; --shadow: none; color-scheme: dark;
+  --accent-soft: #4a2a2d; --income-soft: #24402a; --navy: #3a4a74;
+    --keypad: #2a2b31; --key: #45464e; --shadow: none; color-scheme: dark;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -222,3 +226,68 @@ i.d.sw { width: 22px; height: 22px; border-radius: 7px; }
 .iconos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 2px 0 14px; }
 .iconos button { font-size: 22px; padding: 8px 0; border-radius: 12px; background: var(--line); }
 .iconos button.on { box-shadow: 0 0 0 2px var(--accent); }
+
+/* ---------------- Savey (pestaña Gastos y sus hojas, con la clase .sv) ----------------
+   Copiado de SaveyCustom. Lo que en Panel tiene el mismo nombre pero otro aspecto (.bar, .bcard, .brow, .accsel) va bajo .sv. */
+.monthnav { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.monthnav .title { font-family: var(--serif); font-size: 22px; min-width: 110px; text-align: center; }
+.monthnav .title .yr { color: var(--accent); }
+.monthnav .iconbtn { width: 34px; }
+.monthnav .iconbtn svg { width: 18px; height: 18px; }
+.sv .accsel { font-family: var(--serif); font-size: 21px; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.sv .accsel span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sv .accsel svg { width: 14px; height: 14px; flex: none; }
+.bigbal { font-family: var(--serif); font-size: 19px; white-space: nowrap; }
+.ratio { height: 6px; border-radius: 3px; background: var(--accent); overflow: hidden; margin: 6px 0 14px; }
+.ratio > div { height: 100%; background: var(--income); border-radius: 3px 0 0 3px; }
+.ratio.empty { background: var(--line); }
+.stats { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; margin-bottom: 18px; }
+.stats > div + div { border-left: 1px solid var(--line); }
+.stats .lbl { font-size: 13px; margin-bottom: 3px; }
+.stats .val { font-size: 14px; }
+.dayhdr { font-family: var(--serif); text-align: center; font-size: 18px; margin: 26px 0 6px; }
+.dayhdr:first-child { margin-top: 10px; }
+.networth { text-align: center; margin: 4px 0 18px; }
+.networth .v { font-family: var(--serif); font-size: 28px; font-weight: 600; }
+.acard { display: flex; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 12px 12px 14px; margin-bottom: 12px; width: 100%; text-align: left; box-shadow: var(--shadow); }
+.acard .n { font-size: 15px; }
+.acard .b { font-size: 17px; font-weight: 600; margin-top: 3px; }
+.acard .sq { width: 40px; height: 40px; border-radius: 9px; display: grid; place-items: center; font-size: 20px; }
+.seg button.on.expense { background: var(--accent); color: #fff; }
+.seg button.on.income { background: var(--income); color: #fff; }
+.seg button.on.transfer { background: var(--transfer); color: #fff; }
+.donut { display: block; margin: 8px auto 12px; width: 230px; height: 230px; }
+.donut text { fill: var(--text); font-family: var(--sans); }
+.sv .bcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); width: 100%; text-align: left; display: block; }
+.sv .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 8px 0 6px; display: block; }
+.sv .bar > div { height: 100%; background: var(--income); border-radius: 4px; }
+.sv .bar.warn > div { background: #f0b341; }
+.sv .bar.over > div { background: var(--accent); }
+.sv .brow { display: flex; justify-content: space-between; gap: 0; font-size: 13px; color: var(--muted); }
+.sheet.form { top: calc(var(--safe-t) + 10px); max-height: none; display: flex; flex-direction: column; padding-bottom: 0; }
+.menu-list { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 30px 0 50px; }
+.menu-list button { font-family: var(--serif); font-size: 21px; display: flex; gap: 10px; align-items: center; padding: 4px 14px; border-radius: 999px; }
+.menu-list button.on { background: var(--line); }
+.menu-sep { width: 60px; height: 1px; background: var(--line); }
+.amount { text-align: center; font-family: var(--serif); font-size: 40px; padding: 10px 0 14px; }
+.amount.placeholder { color: var(--text); }
+.typeseg { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; }
+.typeseg button { padding: 6px 16px; border-radius: 999px; font-size: 14px; }
+.typeseg button.on.expense { background: var(--accent); color: #fff; }
+.typeseg button.on.income { background: var(--income); color: #fff; }
+.typeseg button.on.transfer { background: var(--transfer); color: #fff; }
+.form-body { flex: 1; overflow-y: auto; }
+.keypad-wrap { margin: 0 -18px; background: var(--keypad); padding-bottom: calc(8px + var(--safe-b)); }
+.keypad-top { display: flex; justify-content: flex-end; padding: 9px 14px; background: var(--bg); border-top: 1px solid var(--line); }
+.keypad-top button { font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 7px; }
+.keypad button { background: var(--key); border-radius: 7px; height: 48px; font-size: 24px; box-shadow: 0 1px 0 rgba(0,0,0,.25); }
+.keypad button.flat { background: transparent; box-shadow: none; }
+.catgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 6px; padding: 18px 0 30px; }
+.catgrid button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; text-align: center; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 0; }
+.swatches button { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; }
+.swatches button.on { border-color: var(--text); }
+.emojis { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; padding: 6px 0; }
+.emojis button { font-size: 22px; padding: 6px 0; border-radius: 8px; }
+.emojis button.on { background: var(--line); }

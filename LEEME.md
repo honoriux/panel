@@ -49,13 +49,17 @@ La app se niega a conectar si el repositorio es público, si es el de Savey (`sa
 
 Cuando el token caduque verás un aviso en Inicio y en Configuración. Crea uno nuevo y pégalo en el mismo sitio.
 
-## 4. Gastos de Savey (solo lectura)
+## 4. Gastos (Savey)
 
-La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado frente al presupuesto general (con una rayita que marca en qué día del mes vas), los ingresos, las 5 categorías con más gasto (con su presupuesto si lo tienen) y los 5 próximos recurrentes. Lee `datos.json` de `savey-data` y **nunca escribe en él**.
+La pestaña **Gastos** es Savey entero: su Inicio para apuntar con el botón **+**, y en el menú **☰** de arriba a la izquierda el resto de pantallas (Línea temporal, Ideas, Presupuestos, Cuentas) y Recurrente, Editar cuentas y Categorías. Desliza a los lados para cambiar de mes y toca el mes para volver al actual. Sus datos siguen en `savey-data`, aparte de los de Panel.
 
-**Una sola vez**, crea un token de solo lectura (distinto de los otros dos): [Fine-grained tokens → Generate new token](https://github.com/settings/personal-access-tokens/new), nombre `panel-gastos`, *Only select repositories* → `savey-data`, *Contents*: **Read-only**.
+**Una sola vez**, crea un token para Savey en Panel: [Fine-grained tokens → Generate new token](https://github.com/settings/personal-access-tokens/new), nombre `panel-savey`, *Only select repositories* → `savey-data`, *Contents*: **Read and write**. (También vale el que usa SaveyCustom.) El token de solo lectura `panel-gastos` ya no hace falta: puedes borrarlo en GitHub.
 
-**En cada dispositivo:** pestaña **Gastos → Conectar con Savey** (o ⚙️ **Configuración → Conectar gastos de Savey**), con tu usuario, `savey-data` y ese token. Se actualiza al abrir la pestaña (como mucho cada 5 minutos) o con **⟳ Actualizar**, y guarda el último resumen para verlo sin conexión. El token y el resumen se quedan solo en el dispositivo: no van a `panel-data` ni a las copias.
+**En cada dispositivo:** ⚙️ **Configuración → Savey → Sincronizar entre dispositivos**, con tu usuario, `savey-data` y ese token. Como en Panel aún no hay movimientos, se descargan los de GitHub tal cual. El token se queda solo en el dispositivo.
+
+En **Configuración → Savey** están también la moneda y demás preferencias, las copias mensuales, la copia de seguridad y restaurar (los mismos archivos que SaveyCustom) y exportar o importar CSV.
+
+SaveyCustom puede seguir instalada mientras pruebas: las dos sincronizan con `savey-data` y no se pisan ni duplican los recurrentes. Cuando lo tengas claro, puedes borrarla del iPhone.
 
 ## 5. Avisos por WhatsApp
 
@@ -92,8 +96,8 @@ GitHub lo lanza cada hora con unos minutos de retraso; si un envío falla, lo re
   - **Días pedidos**: cada petición dice para qué año cuenta («Cuenta para»), aunque caiga en otro (por ejemplo, días de enero que son del año anterior). Toca el estado para cambiarlo sin abrirla. Si pides un único día, puedes marcarlo como **medio día**: cuenta 0,5.
   - **No laborables**: las fiestas nacionales y los días de empresa del año, plegados, solo para consultar.
   - **Calendario** (selector Lista / Mes / Año): el calendario laboral con colores. Gris para el fin de semana, rojo para las fiestas nacionales y los días de empresa, verde para lo aprobado o disfrutado, amarillo para lo pedido y sin aprobar, y azul con borde discontinuo para lo planificado sin pedir. Los medios días se ven con media casilla coloreada. Hoy va marcado con un círculo. Toca un día para ver qué es y pedirlo; en la vista anual, toca un mes para abrirlo. Desliza a izquierda o derecha para cambiar de mes (o de año, en la vista anual), y toca el nombre del mes o el año para volver al actual.
-- **Gastos**: resumen del mes de SaveyCustom, solo lectura (ver el apartado 4).
-- **Botón +**: en Inicio y Tareas crea una tarea; en Listas te pregunta en qué lista apuntar (o crea una nueva); en Trabajo te pregunta qué.
+- **Gastos**: Savey (ver el apartado 4).
+- **Botón +**: en Inicio y Tareas crea una tarea; en Listas te pregunta en qué lista apuntar (o crea una nueva); en Gastos apunta un movimiento; en Trabajo te pregunta qué.
 - **Pestañas**, de izquierda a derecha: Tareas, Listas, Inicio, Gastos y Trabajo. Al abrir la app, Inicio.
 
 ## Actualizar la app

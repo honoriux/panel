@@ -1,11 +1,11 @@
 'use strict';
-/* Panel — tareas (incluidas las periódicas y renovaciones), trabajo y resumen de gastos.
+/* Panel — tareas (incluidas las periódicas y renovaciones), listas, trabajo y gastos (Savey, en savey.js).
    Hermana de SaveyCustom: misma estructura, mismas piezas (hojas, toast, tema, seguimiento de cambios).
    Los datos viven en el dispositivo (localStorage); la sincronización con GitHub llega en la fase 3. */
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.13';
+const APP_VERSION = 'panel-2026-11-19.14';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -157,12 +157,12 @@ const I = {
 };
 
 /* ---------------- Pestañas ----------------
-   "fab" es lo que hace el botón + en esa pestaña (Gastos no tiene: es solo lectura). */
+   "fab" es lo que hace el botón + en esa pestaña. Gastos es Savey (savey.js): pone su propia barra de arriba ("top"). */
 const TABS = [
   { k: 'tareas', label: 'Tareas', icon: I.check, title: 'Tareas', view: viewTareas, fab: () => openTareaForm(null, { ambito: ui.filtroTareas === 'trabajo' ? 'trabajo' : 'personal' }) },
   { k: 'listas', label: 'Listas', icon: I.list, get title() { const l = ui.lista && lista(ui.lista); return l ? esc(l.nombre) : 'Listas'; }, view: viewListas, fab: () => fabListas() },
   { k: 'home', label: 'Inicio', icon: I.home, title: 'Inicio', view: viewHome, fab: () => openTareaForm(null) },
-  { k: 'gastos', label: 'Gastos', icon: I.chart, title: 'Gastos', view: viewGastos, fab: null },
+  { k: 'gastos', label: 'Gastos', icon: I.chart, title: 'Gastos', top: () => Savey.top(), view: () => Savey.view(), fab: () => Savey.nuevo() },
   { k: 'trabajo', label: 'Trabajo', icon: I.briefcase, title: 'Trabajo', view: viewTrabajo, fab: () => pickList('Añadir', [['tarea', '☑️ Tarea de trabajo'], ['aus', '🏖️ Pedir días']], null, v => v === 'tarea' ? openTareaForm(null, { ambito: 'trabajo' }) : openAusForm(null)) },
 ];
 const tabOf = k => TABS.find(t => t.k === (k === 'cad' ? 'tareas' : k)) || TABS[0]; // 'cad' era la antigua pestaña Caducidades
@@ -172,7 +172,7 @@ function render() {
   const tab = tabOf(ui.tab); ui.tab = tab.k;
   saveUi();
   applyTheme();
-  $('#topbar').innerHTML = `<span></span><div class="pagetitle">${tab.title}</div><button class="iconbtn" data-act="settings" aria-label="Configuración">${I.gear}</button>`;
+  $('#topbar').innerHTML = tab.top ? tab.top() : `<span></span><div class="pagetitle">${tab.title}</div><button class="iconbtn" data-act="settings" aria-label="Configuración">${I.gear}</button>`;
   $('#tabbar').innerHTML = TABS.map(t => `<button class="${t.k === tab.k ? 'on' : ''}" data-act="tab" data-tab="${t.k}">${t.icon}<span>${t.label}</span></button>`).join('');
   $('#fab').hidden = !tab.fab || (tab.k === 'listas' && !!ui.lista); // dentro de una lista se apunta en el campo de arriba
   $('#view').innerHTML = tab.view();
@@ -854,7 +854,8 @@ function openSettings() {
       ${sync?.token ? `<button class="set-row" data-act="syncNow"><span class="ic">⟳</span><span class="t">Sincronizar ahora</span></button>
         <button class="set-row" data-act="monthly"><span class="ic">🗓</span><span class="t">Copias mensuales en GitHub<div class="small">${sync.lastSnapshot ? 'Última: ' + esc(sync.lastSnapshot) : 'Se hará en la próxima sincronización'}</div></span>›</button>` : ''}
       <button class="set-row" data-act="avisosSetup"><span class="ic">✉︎</span><span class="t">Avisos por WhatsApp<div class="small">${esc(MODOS_AVISO[db.avisos.modo]?.n || '')} · a las ${horaTxt(db.avisos.hora)}${(e => e ? `<br><span class="${e.nivel === 'ok' ? '' : 'red'}">${esc(e.texto)}</span>` : '')(estadoAvisos())}</div></span>›</button>
-      <button class="set-row" data-act="gastosSetup"><span class="ic">€</span><span class="t">${gastosCfg?.token ? 'Gastos: ' + esc(gastosCfg.owner + '/' + gastosCfg.repo) : 'Conectar gastos de Savey'}<div class="small">${gastosCfg?.token ? 'Solo lectura' + (gastos ? ' · actualizado ' + haceTxt(gastos.actualizado) : '') : 'Desactivado'}</div></span>›</button>
+      <div class="set-h">Savey (gastos)</div>
+      <button class="set-row" data-act="saveySetup"><span class="ic">€</span><span class="t">Savey<div class="small">${(e => e.conectado ? esc(e.repo) + ' · ' + esc(e.texto) : 'Sin conectar con savey-data')(Savey.estado())}</div></span>›</button>
       <div class="set-h">Datos</div>
       <button class="set-row" data-act="backup"><span class="ic">☁︎</span><span class="t">Exportar copia de seguridad<div class="small">Descarga un archivo con todo${st.lastBackup ? ' · última: ' + longDate(new Date(st.lastBackup)) : ''}</div></span>›</button>
       <button class="set-row" data-act="restore"><span class="ic">⤓</span><span class="t">Restaurar copia de seguridad</span>›</button>
@@ -867,7 +868,7 @@ function openSettings() {
       set: (t, s) => { st[t.dataset.k] = t.value; save(); s.refresh(); render(); },
       syncSetup: () => openSyncSetup(),
       avisosSetup: () => openAvisos(),
-      gastosSetup: () => openGastosSetup(),
+      saveySetup: () => Savey.ajustes(),
       syncNow: (t, s) => { const p = syncNow(); s.refresh(); p.then(() => toast(sync?.lastError ? 'Error al sincronizar' : 'Sincronizado')); },
       monthly: () => openMonthlyBackups(),
       backup: (t, s) => exportBackup().then(() => s.refresh()),
@@ -980,10 +981,8 @@ function backupBanner() {
 
 /* ---------------- Acciones de la vista principal ---------------- */
 const mainActions = {
-  tab: t => { if (t.dataset.tab === 'listas' && ui.tab === 'listas') ui.lista = null; ui.tab = t.dataset.tab; render(); window.scrollTo(0, 0); if (ui.tab === 'gastos') cargarGastos(); },
-  gastosSetup: () => openGastosSetup(),
+  tab: t => { if (t.dataset.tab === 'listas' && ui.tab === 'listas') ui.lista = null; ui.tab = t.dataset.tab; render(); window.scrollTo(0, 0); },
   avisosSetup: () => openAvisos(),
-  gastosRefresh: () => cargarGastos(true),
   settings: () => openSettings(),
   backup: () => exportBackup(),
   filtroTareas: t => { ui.filtroTareas = t.dataset.f; render(); },
@@ -1028,7 +1027,10 @@ document.addEventListener('click', ev => {
   if (ev.target.closest('.sheet-wrap')) return;
   if (ev.target.closest('#fab')) return tabOf(ui.tab).fab?.();
   const t = ev.target.closest('[data-act]');
-  if (t) mainActions[t.dataset.act]?.(t, ev);
+  if (!t) return;
+  // En Gastos, las acciones son las de Savey (salvo la barra de pestañas y las que solo tiene Panel, como la rueda)
+  if (ui.tab === 'gastos' && !t.closest('#tabbar') && Savey.actions[t.dataset.act]) return Savey.actions[t.dataset.act](t, ev);
+  mainActions[t.dataset.act]?.(t, ev);
 });
 // Campo para apuntar en una lista: Intro añade; lo escrito se guarda como borrador por si se redibuja la vista
 document.addEventListener('keydown', ev => {
@@ -1047,6 +1049,7 @@ document.addEventListener('change', ev => {
 // - Calendario: cambia de mes (vista de mes) o de año (vista de año), como en Savey.
 // - Tareas: pasa al filtro siguiente o anterior (Todas, Personal, Trabajo, Periódicas).
 // - Dentro de una lista: hacia la derecha vuelve al resumen de Listas (como «‹ Listas»).
+// - Gastos: cambia de mes, como en Savey (salvo en Cuentas).
 let sx = null, sy = null;
 $('#view').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
 $('#view').addEventListener('touchend', e => {
@@ -1059,6 +1062,7 @@ $('#view').addEventListener('touchend', e => {
     const i = Math.max(0, FILTROS.findIndex(([k]) => k === ui.filtroTareas)), j = i + (dx < 0 ? 1 : -1);
     if (j >= 0 && j < FILTROS.length) { ui.filtroTareas = FILTROS[j][0]; render(); }
   } else if (ui.tab === 'listas' && ui.lista && dx > 0) mainActions.cerrarLista();
+  else if (ui.tab === 'gastos') Savey.swipe(dx);
 }, { passive: true });
 
 function applyTheme() {
@@ -1315,141 +1319,20 @@ function openSyncSetup() {
   });
 }
 
-/* ---------------- Gastos: resumen de Savey (solo lectura) ----------------
-   Lee datos.json del repositorio privado de Savey (savey-data) con su propio token de solo lectura.
-   Nunca escribe en él: aquí solo hay peticiones GET. Se guarda en el dispositivo el último resumen calculado
-   (no los movimientos) para poder verlo sin conexión. Ni el token ni el resumen entran en copias ni en la sincronización. */
-const GASTOS_KEY = 'panel.gastos', GASTOS_CACHE = 'panel.gastos.resumen';
-let gastosCfg = null, gastos = null, gastosCargando = false, gastosError = null;
-try { gastosCfg = JSON.parse(localStorage.getItem(GASTOS_KEY)); } catch (e) { }
-try { gastos = JSON.parse(localStorage.getItem(GASTOS_CACHE)); } catch (e) { }
-const eur = c => `${c < 0 ? '−' : ''}${(Math.abs(c) / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-const mesActual = () => dayKey(new Date()).slice(0, 7);
-const esDeSavey = d => d && Array.isArray(d.transactions) && Array.isArray(d.categories);
-
-// Calcula el resumen del mes en curso a partir de los datos de Savey (importes en céntimos, como en Savey)
-function resumirSavey(s) {
-  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
-  const enMes = t => { const d = new Date(t.date); return d.getFullYear() === y && d.getMonth() === m; };
-  const catS = id => s.categories.find(c => c.id === id) || {};
-  let inc = 0, exp = 0; const porCat = {};
-  for (const t of s.transactions) {
-    if (!enMes(t)) continue;
-    if (t.type === 'income') inc += t.amount;
-    else if (t.type === 'expense') { exp += t.amount; porCat[t.cat] = (porCat[t.cat] || 0) + t.amount; }
-  }
-  const b = s.budgets || {}, modo = b.mode || 'none';
-  const presupuesto = modo === 'income' ? inc : modo === 'fixed' ? (b.general || 0) : null;
-  const top = Object.entries(porCat).sort((a, b2) => b2[1] - a[1]).slice(0, 5).map(([id, total]) => {
-    const c = catS(id); return { nombre: c.name || '¿?', icon: c.icon || '❔', color: c.color || '#7a7f8c', total, limite: (b.cats || {})[id] || null };
-  });
-  const rec = (s.recurring || []).filter(r => r.next).map(r => {
-    const c = catS(r.cat), tr = r.type === 'transfer';
-    return { nombre: tr ? 'Transferencia' : c.name || '¿?', icon: tr ? '🔁' : c.icon || '❔', color: tr ? '#5b8def' : c.color || '#7a7f8c', tipo: r.type, importe: r.amount, fecha: dayKey(new Date(r.next)), nota: r.note || '' };
-  }).sort((a, b2) => a.fecha.localeCompare(b2.fecha)).slice(0, 5);
-  return { mes: mesActual(), inc, exp, presupuesto, modo, top, nCats: Object.keys(porCat).length, rec, actualizado: new Date().toISOString() };
-}
-async function leerSavey(cfg) {
-  try {
-    const { text } = await getFile('datos.json', cfg);
-    if (text === null) throw new Error('El repositorio de Savey aún no tiene datos.json (activa la sincronización en Savey)');
-    const s = JSON.parse(text);
-    if (!esDeSavey(s)) throw new Error('El datos.json de ese repositorio no es de Savey');
-    return s;
-  } catch (e) { throw new Error(String(e.message || e).replace('permiso de escritura', 'permiso de lectura')); }
-}
-async function cargarGastos(force = false) {
-  if (!gastosCfg?.token || gastosCargando || !navigator.onLine) return;
-  if (!force && gastos?.mes === mesActual() && Date.now() - new Date(gastos.actualizado) < 5 * 60000) return;
-  gastosCargando = true; gastosError = null; if (ui.tab === 'gastos') render();
-  try {
-    gastos = resumirSavey(await leerSavey(gastosCfg));
-    try { localStorage.setItem(GASTOS_CACHE, JSON.stringify(gastos)); } catch (e) { }
-  } catch (e) { gastosError = e.message || String(e); }
-  finally { gastosCargando = false; if (ui.tab === 'gastos') render(); }
-}
-const haceTxt = iso => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? 'ahora mismo' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `el ${fmtDia(dayKey(new Date(iso)))}`; };
-
-function viewGastos() {
-  if (!gastosCfg?.token) return `<div class="empty-state">Aquí verás el resumen de gastos de Savey: lo gastado este mes frente al presupuesto, las categorías principales y los próximos recurrentes.<br><br>Panel solo lee los datos de Savey; nunca los modifica.</div>
-    <button class="btn navy" style="width:100%" data-act="gastosSetup">Conectar con Savey</button>`;
-  const estado = gastosCargando ? 'Actualizando…' : gastosError ? `⚠️ ${esc(gastosError)}` : gastos ? `Actualizado ${haceTxt(gastos.actualizado)}` : '';
-  const cab = `<div class="accrow"><span class="serif" style="font-size:21px">${mesNombre(new Date().getMonth())} <span class="red">${new Date().getFullYear()}</span></span>
-    <button class="small" data-act="gastosRefresh" style="color:var(--accent)">⟳ Actualizar</button></div>
-    <div class="small" style="margin:-8px 0 10px">${estado}</div>`;
-  if (!gastos) return cab + (gastosCargando ? '<div class="empty-state">Cargando datos de Savey…</div>' : '');
-  const g = gastos, viejo = g.mes !== mesActual();
-  const pct = g.presupuesto ? g.exp / g.presupuesto : 0, queda = (g.presupuesto || 0) - g.exp;
-  const hoyD = new Date(), diasMes = new Date(hoyD.getFullYear(), hoyD.getMonth() + 1, 0).getDate();
-  const tarjeta = `<div class="bcard">
-      <div class="small">Gastado este mes</div>
-      <div class="serif" style="font-size:30px;margin:2px 0 4px">${eur(g.exp)}</div>
-      ${g.presupuesto !== null ? `<div class="bar ${pct > 1 ? 'over' : pct > .85 ? 'warn' : ''}" style="position:relative"><div style="width:${Math.min(pct, 1) * 100}%"></div><span class="ritmo" style="left:${hoyD.getDate() / diasMes * 100}%"></span></div>
-        <div class="brow"><span>de ${eur(g.presupuesto)} ${g.modo === 'income' ? '(según ingresos)' : ''}</span><span class="${queda < 0 ? 'red' : 'green'}">${queda < 0 ? 'Te pasas ' + eur(-queda) : 'Quedan ' + eur(queda)}</span></div>
-        <div class="small" style="margin-top:4px">La rayita marca el día del mes (${hoyD.getDate()} de ${diasMes}).</div>`
-      : '<div class="small">No tienes presupuesto general en Savey.</div>'}
-      <div class="small" style="margin-top:8px">Ingresos del mes: <b class="green">${eur(g.inc)}</b></div>
-    </div>`;
-  const top = g.top.length ? g.top.map(c => `<div class="row">${ico(c)}<div class="main"><div class="name">${esc(c.nombre)} <span class="muted">(${g.exp ? Math.round(c.total / g.exp * 100) : 0}%)</span></div>
-      ${c.limite ? `<div class="bar ${c.total > c.limite ? 'over' : c.total > c.limite * .85 ? 'warn' : ''}" style="margin:5px 0 0;height:5px"><div style="width:${Math.min(c.total / c.limite, 1) * 100}%"></div></div><div class="sub">${eur(c.total)} de ${eur(c.limite)}</div>` : ''}</div>
-      <div class="amt">${eur(c.total)}</div></div>`).join('') : '<div class="small" style="padding:4px 2px 8px">Sin gastos este mes.</div>';
-  const rec = g.rec.length ? g.rec.map(r => { const n = diasHasta(r.fecha); return `<div class="row">${ico(r)}<div class="main"><div class="name">${esc(r.nombre)}</div><div class="sub">${fmtDia(r.fecha)} · ${n < 0 ? 'pendiente de apuntar' : textoDias(n)}${r.nota ? ' · ' + esc(r.nota) : ''}</div></div>
-      <div class="amt ${r.tipo === 'income' ? 'green' : ''}">${r.tipo === 'income' ? '+' : ''}${eur(r.importe)}</div></div>`; }).join('') : '<div class="small" style="padding:4px 2px 8px">No tienes recurrentes en Savey.</div>';
-  return `${cab}${viejo ? `<div class="banner">Este resumen es de ${mesNombre(+g.mes.slice(5) - 1).toLowerCase()}. Actualiza para ver el mes en curso.</div>` : ''}
-    ${tarjeta}
-    <h2 class="sec">Categorías principales${g.nCats > 5 ? ` <span class="small">(5 de ${g.nCats})</span>` : ''}</h2>${top}
-    <h2 class="sec">Próximos recurrentes</h2>${rec}
-    <p class="small" style="margin-top:18px">Solo lectura: Panel nunca modifica tus datos de Savey.</p>`;
-}
-function openGastosSetup() {
-  const f = { owner: gastosCfg?.owner || sync?.owner || '', repo: gastosCfg?.repo || 'savey-data', token: gastosCfg?.token || '' };
-  let busy = false;
-  openSheet({
-    cls: 'full',
-    render: () => `${head('Gastos de Savey')}
-      <p class="small">Panel lee el <b>datos.json</b> del repositorio privado de Savey para mostrar el resumen de gastos. <b>Nunca escribe en él.</b></p>
-      <div class="field"><label>Usuario de GitHub</label><input data-input="owner" value="${esc(f.owner)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-      <div class="field"><label>Repositorio de Savey</label><input data-input="repo" value="${esc(f.repo)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-      <div class="field"><label>Token de solo lectura</label><input data-input="token" type="password" value="${esc(f.token)}" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-      <p class="small">Crea un token nuevo con acceso solo a savey-data y permiso <b>Contents: Read-only</b>. No uses el de Savey ni el de panel-data. Se guarda solo en este dispositivo.</p>
-      <div class="form-foot">${gastosCfg?.token ? '<button class="btn ghost" data-act="off">Desconectar</button>' : ''}<button class="btn navy" data-act="connect">${busy ? 'Conectando…' : gastosCfg?.token ? 'Guardar' : 'Conectar'}</button></div>`,
-    actions: {
-      owner: t => f.owner = t.value.trim(), repo: t => f.repo = t.value.trim(), token: t => f.token = t.value.trim(),
-      off: (t, s) => {
-        if (!confirm('¿Desconectar los gastos de Savey en este dispositivo? Se borra el token y el último resumen guardado aquí.')) return;
-        gastosCfg = null; gastos = null; gastosError = null; localStorage.removeItem(GASTOS_KEY); localStorage.removeItem(GASTOS_CACHE); s.close(); render();
-      },
-      connect: async (t, s) => {
-        if (busy) return;
-        if (!f.owner || !f.repo || !f.token) return toast('Rellena los tres campos');
-        const cfg = { owner: f.owner, repo: f.repo, token: f.token };
-        busy = true; s.refresh();
-        try {
-          const r = await gh('', {}, cfg);
-          if (!r.ok) throw new Error(ghError(r).replace('permiso de escritura', 'permiso de lectura'));
-          if (!(await r.json()).private) throw new Error('Ese repositorio es PÚBLICO. Tus datos de Savey deberían estar en un repositorio privado.');
-          const datos = await leerSavey(cfg);
-          gastosCfg = cfg; try { localStorage.setItem(GASTOS_KEY, JSON.stringify(cfg)); } catch (e) { }
-          gastos = resumirSavey(datos); gastosError = null; try { localStorage.setItem(GASTOS_CACHE, JSON.stringify(gastos)); } catch (e) { }
-          busy = false; s.close(); ui.tab = 'gastos'; render(); toast('Gastos de Savey conectados');
-        } catch (e) { busy = false; s.refresh(); alert(e.message || String(e)); }
-      },
-    },
-  });
-}
-
 /* ---------------- Arranque ---------------- */
 load();
+// El antiguo resumen de gastos de solo lectura ya no existe (ahora Gastos es Savey): se borra su token y su caché
+try { localStorage.removeItem('panel.gastos'); localStorage.removeItem('panel.gastos.resumen'); } catch (e) { }
 render();
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { if (syncTimer) syncNow(); return; } // sube lo pendiente antes de que iOS congele la app
+  if (document.hidden) { if (syncTimer) syncNow(); Savey.alOcultar(); return; } // sube lo pendiente antes de que iOS congele la app
   render(); // al volver a la app, recalcula los días restantes
   syncNow();
-  if (ui.tab === 'gastos') cargarGastos();
+  Savey.alVolver(); // apunta los recurrentes que tocan y sincroniza con savey-data
 });
-window.addEventListener('online', () => syncNow());
+window.addEventListener('online', () => { syncNow(); Savey.sincronizar(); });
 syncNow();
-if (ui.tab === 'gastos') cargarGastos();
+Savey.sincronizar();
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
