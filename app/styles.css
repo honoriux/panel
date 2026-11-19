@@ -114,6 +114,10 @@ h2.sec { font-family: var(--serif); font-weight: 400; font-size: 21px; margin: 1
 .d.plan, .cal .d.plan { background: var(--c-plan-bg); border: 2px dashed var(--c-plan); color: var(--text); }
 .cal.mini .d.plan { border-width: 1px; }
 .cal .d.otro { opacity: .35; }
+/* Medio día: la mitad de la casilla con el color de su estado */
+.d.medio.ok, .cal .d.medio.ok { background: linear-gradient(135deg, var(--c-ok) 50%, var(--card) 50%); color: var(--text); }
+.d.medio.pend, .cal .d.medio.pend { background: linear-gradient(135deg, var(--c-pend) 50%, var(--card) 50%); color: var(--text); }
+.d.medio.plan, .cal .d.medio.plan { background: linear-gradient(135deg, var(--c-plan-bg) 50%, var(--card) 50%); }
 .d.hoy::after { content: ""; position: absolute; inset: 3px; border: 2px solid var(--text); border-radius: 50%; pointer-events: none; }
 .cal.mini .d.hoy::after { inset: -1px; border-width: 1.5px; }
 .year { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; align-items: start; }

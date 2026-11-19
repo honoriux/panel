@@ -23,7 +23,8 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
     "u": 0,
     "año": 2026,
     "vacacionesTotales": 24,
-    "ausencias": [{ "id": "", "u": 0, "tipo": "vacaciones|festivo_local|festivo_autonomico|asuntos_propios|otro", "nombre": "", "desde": "", "hasta": "", "estado": "por_pedir|pedido|aprobado|disfrutado", "año": 2026 }]
+    "festivos": { "2026": 3 },
+    "ausencias": [{ "id": "", "u": 0, "tipo": "vacaciones|asuntos_propios|otro", "nombre": "", "desde": "", "hasta": "", "estado": "por_pedir|pedido|aprobado|disfrutado", "año": 2026, "medio": false }]
   },
   "deleted": {}
 }
@@ -37,8 +38,9 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
 1. **Inicio**: tareas vencidas, de hoy, de esta semana, las que ya están dentro de su `avisoDias` y las que no tienen fecha; días libres que quedan del año.
 2. **Tareas** (en la interfaz siempre «tarea», nunca «pendiente»): todas juntas, también las periódicas (renovaciones), con filtro (todas, personal, trabajo, periódicas), fecha opcional, prioridad, repetición, aviso y completadas plegadas.
 3. **Trabajo**: tareas de ámbito trabajo, calendario laboral (lista, mes y año) y una **bolsa única de días libres por año**. Solo datos genéricos: nada confidencial de clientes.
-   - Total del año = `vacacionesTotales` (22 de vacaciones + 2 de libre disposición = 24) + los festivos locales y autonómicos de **Sevilla** de ese año que caen entre semana y no son fiesta nacional. Para Álvaro no son festivos, sino días libres más que se piden como cualquier otro: en el calendario no se distinguen.
-   - Cada ausencia que descuenta (`vacaciones`, `asuntos_propios`) lleva `año`: el año de días al que cuenta, que puede no ser el de su fecha. `otro` no descuenta. Los festivos (`festivo_*`) son solo referencia: suman al total de su año y su `estado` no se usa.
+   - Total del año = `vacacionesTotales` (22 de vacaciones + 2 de libre disposición = 24) + `trabajo.festivos[año]`: el **número** de festivos locales y autonómicos que da la empresa ese año (por defecto `FESTIVOS_DEFECTO`: 2026 → 3, 1 local + 2 autonómicos por el cambio de Madrid a Sevilla; 2027 → 5 de Sevilla). Para la empresa son una cantidad de días, no fechas: se gastan el día que se quiera y en el calendario no se distinguen.
+   - Cada ausencia que descuenta (`vacaciones`, `asuntos_propios`) lleva `año`: el año de días al que cuenta, que puede no ser el de su fecha. `otro` no descuenta. `medio: true` (solo en un único día) cuenta 0,5, como la casilla «Medio día» de la app de la empresa.
+   - Los antiguos `festivo_local` / `festivo_autonomico` como fechas se eliminan al cargar (marcados en `deleted`).
    - Días laborables = lunes a viernes sin fiestas nacionales comunes de España (fijas más Viernes Santo calculado) ni los días de empresa (24 y 31 de diciembre).
    - Una ausencia aprobada cuya fecha ya pasó cuenta como disfrutada (sin cambiar el dato).
 4. **Gastos**: hasta la fase 6, resumen de solo lectura de `savey-data` (token de solo lectura; nunca escribe). En la fase 6 pasa a ser Savey entero (ver abajo).

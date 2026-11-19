@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.3';
+const APP_VERSION = 'panel-2026-11-19.4';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -44,8 +44,12 @@ function normalize() {
   for (const t of db.tareas) { if (t.repite === undefined) t.repite = null; if (t.avisoDias === undefined) t.avisoDias = null; if (t.tipo === undefined) t.tipo = null; }
   db.trabajo = Object.assign(d.trabajo, db.trabajo || {});
   db.trabajo.ausencias = db.trabajo.ausencias || [];
+  // Los festivos ya no son fechas sino un número por año (trabajo.festivos). Los antiguos se eliminan
+  // marcándolos como borrados, para que la sincronización también los quite del resto de dispositivos.
+  for (const a of db.trabajo.ausencias) if (a.tipo === 'festivo_local' || a.tipo === 'festivo_autonomico') db.deleted = { ...(db.deleted || {}), [a.id]: Math.max(Date.now(), (a.u || 0) + 1) };
+  db.trabajo.ausencias = db.trabajo.ausencias.filter(a => a.tipo !== 'festivo_local' && a.tipo !== 'festivo_autonomico');
   // Los días pedidos cuentan para un año ("año"); si falta, el de su fecha de inicio
-  for (const a of db.trabajo.ausencias) if (!a.tipo.startsWith('festivo') && !a['año']) a['año'] = +a.desde.slice(0, 4);
+  for (const a of db.trabajo.ausencias) if (!a['año']) a['año'] = +a.desde.slice(0, 4);
   db.deleted = db.deleted || {};
 }
 // Guarda un cambio hecho en este dispositivo: marca qué registros cambiaron (para sincronizar) y guarda.
@@ -145,7 +149,7 @@ const I = {
 const TABS = [
   { k: 'home', label: 'Inicio', icon: I.home, title: 'Inicio', view: viewHome, fab: () => openTareaForm(null) },
   { k: 'tareas', label: 'Tareas', icon: I.check, title: 'Tareas', view: viewTareas, fab: () => openTareaForm(null, { ambito: ui.filtroTareas === 'trabajo' ? 'trabajo' : 'personal' }) },
-  { k: 'trabajo', label: 'Trabajo', icon: I.briefcase, title: 'Trabajo', view: viewTrabajo, fab: () => pickList('Añadir', [['tarea', '☑️ Tarea de trabajo'], ['aus', '🏖️ Pedir días'], ['fest', '🏛️ Festivo']], null, v => v === 'tarea' ? openTareaForm(null, { ambito: 'trabajo' }) : v === 'aus' ? openAusForm(null) : openAusForm(null, { tipo: 'festivo_local' })) },
+  { k: 'trabajo', label: 'Trabajo', icon: I.briefcase, title: 'Trabajo', view: viewTrabajo, fab: () => pickList('Añadir', [['tarea', '☑️ Tarea de trabajo'], ['aus', '🏖️ Pedir días']], null, v => v === 'tarea' ? openTareaForm(null, { ambito: 'trabajo' }) : openAusForm(null)) },
   { k: 'gastos', label: 'Gastos', icon: I.chart, title: 'Gastos', view: viewGastos, fab: null },
 ];
 const tabOf = k => TABS.find(t => t.k === (k === 'cad' ? 'tareas' : k)) || TABS[0]; // 'cad' era la antigua pestaña Caducidades
@@ -330,21 +334,18 @@ function openTareaForm(existing, preset = {}) {
   });
 }
 
-/* ---------------- Trabajo: días libres, festivos y no laborables ----------------
-   Una sola bolsa de días libres por año: vacaciones + libre disposición (vacacionesTotales) más los festivos
-   locales y autonómicos de Sevilla de ese año, que la empresa da como días a pedir. Da igual de qué parte
-   se descuente cada día: lo que importa es cuántos quedan.
+/* ---------------- Trabajo: días libres y no laborables ----------------
+   Una sola bolsa de días libres por año: vacaciones + libre disposición (vacacionesTotales, igual cada año)
+   más los festivos locales y autonómicos que la empresa da ese año como días a pedir (trabajo.festivos[año]).
+   Para la empresa los festivos son una cantidad de días, no fechas: se gastan el día que se quiera.
    Cada día pedido cuenta para un año ("año" de la ausencia), que puede no ser el de su fecha
-   (por ejemplo, días de enero de 2027 que son de las vacaciones de 2026). */
+   (por ejemplo, días de enero de 2027 que son de las vacaciones de 2026). Un día suelto puede ser medio día ("medio"). */
 const TIPOS_AUS = {
   vacaciones: { n: 'Vacaciones', icon: '🏖️', color: '#e8659b' },
   asuntos_propios: { n: 'Libre disposición', icon: '🗓️', color: '#5b9cf0' },
   otro: { n: 'Otro (no descuenta)', icon: '📄', color: '#7a7f8c' },
-  festivo_local: { n: 'Festivo local', icon: '🏛️', color: '#f0b341' },
-  festivo_autonomico: { n: 'Festivo autonómico', icon: '🎉', color: '#f08a3c' },
 };
 const ESTADOS = { por_pedir: 'Por pedir', pedido: 'Pedido', aprobado: 'Aprobado', disfrutado: 'Disfrutado' };
-const esFestivo = a => a.tipo === 'festivo_local' || a.tipo === 'festivo_autonomico';
 const descuenta = a => a.tipo === 'vacaciones' || a.tipo === 'asuntos_propios';
 const añoDe = a => a['año'] || +a.desde.slice(0, 4);
 const aus = id => db.trabajo.ausencias.find(a => a.id === id);
@@ -371,18 +372,14 @@ function noLaborables(y) {
   return _noLab[y] = l;
 }
 const esNoLaborable = f => noLaborables(+f.slice(0, 4)).some(([x]) => x === f);
-// Festivos de Sevilla que caen entre semana y no son fiesta nacional: autonómicos de Andalucía y locales de Sevilla capital.
-// Fuentes: Decreto 101/2025 (BOJA 19/05/2025), Decreto 84/2026 (BOJA 05/05/2026) y acuerdos del Ayuntamiento de Sevilla
-// (los locales de 2027 son la propuesta municipal).
-const FESTIVOS_SEVILLA = {
-  2026: [['2026-04-02', 'festivo_autonomico', 'Jueves Santo'], ['2026-04-22', 'festivo_local', 'Miércoles de Feria'], ['2026-06-04', 'festivo_local', 'Corpus Christi'], ['2026-11-02', 'festivo_autonomico', 'Todos los Santos (traslado)'], ['2026-12-07', 'festivo_autonomico', 'Día de la Constitución (traslado)']],
-  2027: [['2027-03-01', 'festivo_autonomico', 'Día de Andalucía (traslado)'], ['2027-03-25', 'festivo_autonomico', 'Jueves Santo'], ['2027-04-14', 'festivo_local', 'Miércoles de Feria'], ['2027-05-27', 'festivo_local', 'Corpus Christi'], ['2027-08-16', 'festivo_autonomico', 'Asunción de la Virgen (traslado)']],
-};
-const festivosDe = y => db.trabajo.ausencias.filter(a => esFestivo(a) && a.desde.slice(0, 4) === String(y)).sort((a, b) => a.desde.localeCompare(b.desde));
-const festivosPorCargar = y => (FESTIVOS_SEVILLA[y] || []).filter(([fecha]) => { const id = `fs_${fecha}`; return !aus(id) && !db.deleted[id]; });
+// Festivos (locales + autonómicos) que da la empresa cada año, si no se ha puesto otro número en la app.
+// 2026: 1 local + 2 autonómicos, según el resumen de vacaciones de la empresa (año del cambio de Madrid a Sevilla).
+// 2027: los 5 de Sevilla que caen entre semana y no son nacionales (Día de Andalucía, Jueves Santo, Feria, Corpus
+// y traslado de la Asunción; Decreto 84/2026, BOJA 05/05/2026, y calendario de la empresa).
+const FESTIVOS_DEFECTO = { 2026: 3, 2027: 5 };
+const festivosAño = y => db.trabajo.festivos?.[y] ?? FESTIVOS_DEFECTO[y] ?? 0;
 
 // Días laborables de un periodo: de lunes a viernes, sin fiestas nacionales ni días de empresa.
-// Los festivos de Sevilla sí cuentan: forman parte de la bolsa de días libres.
 function diasLaborables(desde, hasta) {
   if (!desde || !hasta || hasta < desde) return 0;
   let n = 0;
@@ -391,39 +388,34 @@ function diasLaborables(desde, hasta) {
   }
   return n;
 }
+// Días que gasta una petición (medio día = 0,5)
+const diasDe = a => diasLaborables(a.desde, a.hasta) * (a.medio ? .5 : 1);
 function contadorDias(y = db.trabajo['año']) {
-  const fest = festivosDe(y).length, base = db.trabajo.vacacionesTotales || 0;
+  const fest = festivosAño(y), base = db.trabajo.vacacionesTotales || 0;
   const l = db.trabajo.ausencias.filter(a => descuenta(a) && añoDe(a) === y);
-  const suma = est => l.filter(a => est.includes(estadoReal(a))).reduce((s, a) => s + diasLaborables(a.desde, a.hasta), 0);
+  const suma = est => l.filter(a => est.includes(estadoReal(a))).reduce((s, a) => s + diasDe(a), 0);
   const total = base + fest, disfrutados = suma(['disfrutado']), pedidos = suma(['pedido', 'aprobado']), planificados = suma(['por_pedir']);
   return { base, fest, total, disfrutados, pedidos, planificados, restantes: total - disfrutados - pedidos };
 }
 const rangoTxt = a => a.desde === a.hasta ? `${DAYS[parseDia(a.desde).getDay()]}, ${fmtDia(a.desde)}` : `${fmtDia(a.desde).slice(0, 5)} – ${fmtDia(a.hasta)}`;
-const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+const num = n => String(n).replace('.', ',');
+const plural = (n, s, p) => `${num(n)} ${n === 1 ? s : p}`;
+const diasTxt = n => n === .5 ? 'medio día' : plural(n, 'día', 'días');
 // Selector de estado dentro de una fila de la vista principal (cambia sin abrir el formulario)
 const estadoChip = a => { const e = estadoReal(a); return `<label class="tag chip st-${e}">${ESTADOS[e]} ▾<select data-change="estadoAus" data-id="${a.id}">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === e ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`; };
 function ausRow(a) {
-  const t = TIPOS_AUS[a.tipo] || TIPOS_AUS.otro, n = diasLaborables(a.desde, a.hasta);
-  const sub = [rangoTxt(a), descuenta(a) ? plural(n, 'día', 'días') : 'no descuenta', añoDe(a) !== +a.desde.slice(0, 4) ? `<b>de ${añoDe(a)}</b>` : ''].filter(Boolean).join(' · ');
+  const t = TIPOS_AUS[a.tipo] || TIPOS_AUS.otro;
+  const sub = [rangoTxt(a), descuenta(a) ? diasTxt(diasDe(a)) : 'no descuenta', añoDe(a) !== +a.desde.slice(0, 4) ? `<b>de ${añoDe(a)}</b>` : ''].filter(Boolean).join(' · ');
   return `<div class="row ${estadoReal(a) === 'disfrutado' ? 'done' : ''}"><button class="rowmain" data-act="editAus" data-id="${a.id}">${ico(t)}
     <div class="main"><div class="name">${esc(a.nombre || t.n)}</div><div class="sub">${sub}</div></div></button>${estadoChip(a)}</div>`;
-}
-// Fila de festivo: informativa. A la derecha, si ya hay días pedidos que lo cubren, su estado; si no, un botón para pedirlo.
-function festivoRow(a) {
-  const t = TIPOS_AUS[a.tipo];
-  const cubre = db.trabajo.ausencias.find(x => descuenta(x) && x.desde <= a.desde && x.hasta >= a.desde);
-  const right = cubre ? `<span class="tag st-${estadoReal(cubre)}">${ESTADOS[estadoReal(cubre)]}</span>`
-    : a.desde < hoy() ? '<span class="tag">pasado</span>' : `<button class="tag chip" data-act="pedirFestivo" data-id="${a.id}">Pedir</button>`;
-  return `<div class="row ${cubre && estadoReal(cubre) === 'disfrutado' || (!cubre && a.desde < hoy()) ? 'done' : ''}"><button class="rowmain" data-act="editAus" data-id="${a.id}">${ico(t)}
-    <div class="main"><div class="name">${esc(a.nombre)}</div><div class="sub">${DAYS[parseDia(a.desde).getDay()]}, ${fmtDia(a.desde)} · ${a.tipo === 'festivo_local' ? 'Local' : 'Autonómico'}</div></div></button>${right}</div>`;
 }
 function tarjetaDias(y, compacta = false) {
   const c = contadorDias(y), pct = v => c.total ? Math.min(100, v / c.total * 100) : 0;
   return `<div class="bcard" ${compacta ? `data-act="verDias" data-y="${y}" role="button" style="cursor:pointer"` : ''}>
       <div style="display:flex;justify-content:space-between;align-items:center"><span class="serif" style="font-size:19px">Días libres ${y}</span>${compacta ? '<span class="small">›</span>' : `<button class="small" data-act="editTotales" style="color:var(--accent)">Editar</button>`}</div>
       <div class="bar"><div style="width:${pct(c.disfrutados)}%"></div><div class="b2" style="width:${pct(c.pedidos)}%"></div></div>
-      <div class="stats4"><div><b>${c.total}</b><span>Totales</span></div><div><b class="green">${c.disfrutados}</b><span>Disfrutados</span></div><div><b style="color:var(--warn)">${c.pedidos}</b><span>Pedidos</span></div><div><b class="${c.restantes < 0 ? 'red' : ''}">${c.restantes}</b><span>Restantes</span></div></div>
-      ${compacta ? '' : `<div class="small" style="margin-top:8px">${c.base} de vacaciones y libre disposición + ${plural(c.fest, 'festivo', 'festivos')} de Sevilla.</div>`}
+      <div class="stats4"><div><b>${num(c.total)}</b><span>Totales</span></div><div><b class="green">${num(c.disfrutados)}</b><span>Disfrutados</span></div><div><b style="color:var(--warn)">${num(c.pedidos)}</b><span>Pedidos</span></div><div><b class="${c.restantes < 0 ? 'red' : ''}">${num(c.restantes)}</b><span>Restantes</span></div></div>
+      ${compacta ? '' : `<div class="small" style="margin-top:8px">${num(c.base)} de vacaciones y libre disposición + ${plural(c.fest, 'festivo', 'festivos')} de la empresa.</div>`}
       ${c.planificados ? `<div class="small" style="margin-top:4px">Además tienes ${plural(c.planificados, 'día planificado', 'días planificados')} sin pedir.</div>` : ''}
     </div>`;
 }
@@ -435,8 +427,8 @@ function viewTrabajo() {
   if (vista === 'año') return seg + viewAñoCal();
   const y = db.trabajo['año'];
   const tareas = pendientes('trabajo');
-  const ausencias = db.trabajo.ausencias.filter(a => !esFestivo(a) && añoDe(a) === y).sort((a, b) => a.desde.localeCompare(b.desde));
-  const festivos = festivosDe(y), cargar = festivosPorCargar(y), noLab = noLaborables(y);
+  const ausencias = db.trabajo.ausencias.filter(a => añoDe(a) === y).sort((a, b) => a.desde.localeCompare(b.desde));
+  const noLab = noLaborables(y);
   return `${seg}<div class="accrow"><button class="accsel" data-act="pickAño"><span>${y}</span>${I.down}</button></div>
     ${tarjetaDias(y)}
     <h2 class="sec">Tareas de trabajo</h2>
@@ -445,41 +437,32 @@ function viewTrabajo() {
     <div class="small" style="margin:-4px 0 6px">Los que cuentan para ${y}, aunque caigan en otro año</div>
     ${ausencias.map(ausRow).join('')}
     <button class="addcard" data-act="newAus" style="margin-top:10px">+ Pedir días</button>
-    ${!festivos.length && cargar.length ? `<button class="addcard" data-act="cargarFestivos" style="margin-top:16px">⤓ Cargar festivos de Sevilla ${y} (+${cargar.length} días libres)</button>` : ''}
-    <button class="fold" data-act="toggleFest">${ui.verFest ? '▾' : '▸'} Festivos de Sevilla de ${y} (${festivos.length}): suman a tus días libres</button>
-    ${ui.verFest ? `${festivos.map(festivoRow).join('')}
-      ${festivos.length && cargar.length ? `<button class="addcard" data-act="cargarFestivos" style="margin-top:10px">⤓ Cargar los que faltan (${cargar.length})</button>` : ''}
-      ${!festivos.length && !cargar.length ? `<div class="small" style="padding:4px 2px">No tengo los festivos de Sevilla de ${y}; puedes añadirlos a mano.</div>` : ''}
-      <button class="addcard" data-act="newFestivo" style="margin-top:10px">+ Añadir festivo</button>` : ''}
     <button class="fold" data-act="toggleNoLab">${ui.verNoLab ? '▾' : '▸'} No laborables de ${y} (${noLab.length}): no se piden</button>
     ${ui.verNoLab ? noLab.map(([f, n, k]) => `<div class="row done"><span class="ico" style="background:var(--line)">${k === 'empresa' ? '🏢' : '📅'}</span><div class="main"><div class="name">${n}</div><div class="sub">${DAYS[parseDia(f).getDay()]}, ${fmtDia(f)} · ${k === 'empresa' ? 'Lo da la empresa' : 'Fiesta nacional'}</div></div></div>`).join('') : ''}`;
-}
-function cargarFestivos() {
-  const y = db.trabajo['año'], l = festivosPorCargar(y);
-  for (const [fecha, tipo, nombre] of l) db.trabajo.ausencias.push({ id: `fs_${fecha}`, tipo, nombre, desde: fecha, hasta: fecha, estado: 'por_pedir' });
-  save(); render(); toast(`${plural(l.length, 'festivo añadido', 'festivos añadidos')}`);
 }
 
 function openAusForm(existing, preset = {}) {
   const isEdit = !!existing, y0 = db.trabajo['año'];
-  const f = existing ? { ...existing, 'año': añoDe(existing) } : { tipo: 'vacaciones', nombre: '', desde: '', hasta: '', estado: 'por_pedir', 'año': y0, ...preset };
-  const fest = esFestivo(f);
-  const tipos = Object.entries(TIPOS_AUS).filter(([k]) => fest ? k.startsWith('festivo') : !k.startsWith('festivo'));
+  const f = existing ? { ...existing, 'año': añoDe(existing), medio: !!existing.medio } : { tipo: 'vacaciones', nombre: '', desde: '', hasta: '', estado: 'por_pedir', 'año': y0, medio: false, ...preset };
+  if (!TIPOS_AUS[f.tipo]) f.tipo = 'vacaciones';
   const dateRow = (k, label) => `<div class="frow"><span>${label}</span><span class="v ${f[k] ? '' : 'ph'}">${f[k] ? `${DAYS[parseDia(f[k]).getDay()]}, ${fmtDia(f[k])}` : 'Seleccionar ›'}</span><input type="date" data-valor="${f[k] || ''}" data-on="${k}"></div>`;
+  // Medio día solo tiene sentido si es un único día
+  const unDia = () => f.desde && (!f.hasta || f.hasta === f.desde);
   openSheet({
     cls: 'full',
     render: () => {
-      const t = TIPOS_AUS[f.tipo], n = diasLaborables(f.desde, f.hasta || f.desde);
+      const t = TIPOS_AUS[f.tipo], n = diasLaborables(f.desde, f.hasta || f.desde) * (unDia() && f.medio ? .5 : 1);
       const años = [...new Set([y0 - 1, y0, y0 + 1, f['año']])].sort();
-      return `${head(isEdit ? 'Editar' : fest ? 'Nuevo festivo' : 'Pedir días')}
-      <div class="frow"><span>Tipo</span><span class="v">${ico(t)} ${t.n} ›</span><select class="overlay" data-on="tipo">${tipos.map(([k, v]) => `<option value="${k}" ${k === f.tipo ? 'selected' : ''}>${v.icon} ${v.n}</option>`).join('')}</select></div>
-      <div class="field"><label>Nombre${fest ? '' : ' (opcional)'}</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="${fest ? 'Ej. Miércoles de Feria' : 'Ej. Navidad en casa'}"></div>
-      ${dateRow('desde', fest ? 'Fecha' : 'Desde')}
-      ${fest ? '' : dateRow('hasta', 'Hasta')}
-      ${fest ? '' : `${f.desde ? `<div class="small" style="padding:8px 0">${f.hasta && f.hasta < f.desde ? '<span class="red">La fecha final es anterior a la inicial.</span>'
-        : `${f.hasta ? '' : 'Sin «Hasta», será solo ese día: '}${plural(n, 'día laborable', 'días laborables')} (sin fines de semana, fiestas nacionales ni 24 y 31 de diciembre).`}</div>` : ''}
-        <div class="frow"><span>Cuenta para</span><span class="v">Días de ${f['año']} ›</span><select class="overlay" data-on="año">${años.map(a => `<option value="${a}" ${a === f['año'] ? 'selected' : ''}>Días de ${a}</option>`).join('')}</select></div>
-        <div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
+      return `${head(isEdit ? 'Editar' : 'Pedir días')}
+      <div class="frow"><span>Tipo</span><span class="v">${ico(t)} ${t.n} ›</span><select class="overlay" data-on="tipo">${Object.entries(TIPOS_AUS).map(([k, v]) => `<option value="${k}" ${k === f.tipo ? 'selected' : ''}>${v.icon} ${v.n}</option>`).join('')}</select></div>
+      <div class="field"><label>Nombre (opcional)</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="Ej. Navidad en casa"></div>
+      ${dateRow('desde', 'Desde')}
+      ${dateRow('hasta', 'Hasta')}
+      ${unDia() ? `<button class="set-row" data-act="medio"><span class="t">Medio día</span><span class="switch ${f.medio ? 'on' : ''}"></span></button>` : ''}
+      ${f.desde ? `<div class="small" style="padding:8px 0">${f.hasta && f.hasta < f.desde ? '<span class="red">La fecha final es anterior a la inicial.</span>'
+        : `${f.hasta ? '' : 'Sin «Hasta», será solo ese día: '}${n === .5 ? 'medio día laborable' : plural(n, 'día laborable', 'días laborables')} (sin fines de semana, fiestas nacionales ni 24 y 31 de diciembre).`}</div>` : ''}
+      <div class="frow"><span>Cuenta para</span><span class="v">Días de ${f['año']} ›</span><select class="overlay" data-on="año">${años.map(a => `<option value="${a}" ${a === f['año'] ? 'selected' : ''}>Días de ${a}</option>`).join('')}</select></div>
+      <div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`;
     },
     actions: {
@@ -487,6 +470,7 @@ function openAusForm(existing, preset = {}) {
       tipo: (t, s) => { f.tipo = t.value; s.refresh(); },
       estado: (t, s) => { f.estado = t.value; s.refresh(); },
       'año': (t, s) => { f['año'] = +t.value; s.refresh(); },
+      medio: (t, s) => { f.medio = !f.medio; s.refresh(); },
       // «Hasta» no se rellena solo: si se guarda vacío, es un único día. Si queda antes de «Desde», se vacía.
       // Restablecer cualquiera de los dos los vacía ambos.
       desde: (t, s) => {
@@ -498,12 +482,10 @@ function openAusForm(existing, preset = {}) {
         if (!f.hasta && f.desde) { f.desde = ''; const d = s.el.querySelector('[data-on=desde]'); if (d) fechaEnSitio(d, s, ''); }
       },
       save: (t, s) => {
-        if (fest && !f.nombre.trim()) return toast('Pon el nombre del festivo');
         if (!f.desde) return toast('Elige la fecha');
-        const hasta = fest ? f.desde : (f.hasta || f.desde);
+        const hasta = f.hasta || f.desde;
         if (hasta < f.desde) return toast('La fecha final es anterior a la inicial');
-        const d = fest ? { tipo: f.tipo, nombre: f.nombre.trim(), desde: f.desde, hasta, estado: 'por_pedir' }
-          : { tipo: f.tipo, nombre: f.nombre.trim(), desde: f.desde, hasta, estado: f.estado, 'año': f['año'] };
+        const d = { tipo: f.tipo, nombre: f.nombre.trim(), desde: f.desde, hasta, estado: f.estado, 'año': f['año'], medio: hasta === f.desde && !!f.medio };
         if (isEdit) Object.assign(existing, d);
         else db.trabajo.ausencias.push({ id: uid(), ...d });
         save(); s.close(); render(); toast(isEdit ? 'Guardado' : 'Añadido');
@@ -516,19 +498,26 @@ function openAusForm(existing, preset = {}) {
     },
   });
 }
+// Días libres: vacaciones + libre disposición (igual todos los años) y festivos de la empresa del año que se está viendo
 function openTotales() {
-  let v = String(db.trabajo.vacacionesTotales ?? '');
-  const y = db.trabajo['año'], fest = festivosDe(y).length;
+  const y = db.trabajo['año'];
+  let v = String(db.trabajo.vacacionesTotales ?? ''), fv = String(festivosAño(y));
   openSheet({
-    render: () => `${head('Días libres al año')}
-      <div class="field"><label>Vacaciones + libre disposición</label><input data-input="v" inputmode="numeric" value="${esc(v)}" placeholder="Ej. 24"></div>
-      <p class="small">Los festivos de Sevilla se suman solos según el año (${y}: ${plural(fest, 'festivo', 'festivos')}). Las fiestas nacionales y el 24 y 31 de diciembre no cuentan.</p>
+    render: () => `${head('Días libres', String(y))}
+      <div class="field"><label>Vacaciones + libre disposición (cada año)</label><input data-input="v" inputmode="numeric" value="${esc(v)}" placeholder="Ej. 24"></div>
+      <div class="field"><label>Festivos locales y autonómicos que da la empresa en ${y}</label><input data-input="fv" inputmode="numeric" value="${esc(fv)}" placeholder="Ej. 5"></div>
+      <p class="small">Míralo en el resumen de vacaciones de la app de tu empresa (Festivo local + Festivo autonómico). Las fiestas nacionales y el 24 y 31 de diciembre no cuentan.</p>
       <div class="form-foot"><button class="btn navy" data-act="save">Guardar</button></div>`,
     actions: {
-      v: t => v = t.value,
-      save: (t, s) => { const n = parseInt(v, 10); if (!(n >= 0 && n <= 99)) return toast('Número no válido'); db.trabajo.vacacionesTotales = n; save(); s.close(); render(); },
+      v: t => v = t.value, fv: t => fv = t.value,
+      save: (t, s) => {
+        const n = parseInt(v, 10), nf = parseInt(fv, 10);
+        if (!(n >= 0 && n <= 99) || !(nf >= 0 && nf <= 20)) return toast('Número no válido');
+        db.trabajo.vacacionesTotales = n;
+        db.trabajo.festivos = { ...(db.trabajo.festivos || {}), [y]: nf };
+        save(); s.close(); render();
+      },
     },
-    onRender: s => setTimeout(() => s.el.querySelector('input')?.focus(), 300),
   });
 }
 
@@ -538,16 +527,16 @@ function openTotales() {
 const MONTHS_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const mesNombre = m => MONTHS_L[m][0].toUpperCase() + MONTHS_L[m].slice(1);
 const CLASE_ESTADO = { disfrutado: 'ok', aprobado: 'ok', pedido: 'pend', por_pedir: 'plan' };
-const LEYENDA = [['fin', 'Fin de semana'], ['nac', 'Fiesta nacional o de empresa'], ['ok','Aprobado o disfrutado'], ['pend', 'Pedido, sin aprobar'], ['plan', 'Planificado, sin pedir']];
+const LEYENDA = [['fin', 'Fin de semana'], ['nac', 'Fiesta nacional o de empresa'], ['ok','Aprobado o disfrutado'], ['pend', 'Pedido, sin aprobar'], ['plan', 'Planificado, sin pedir'], ['ok medio', 'Medio día']];
 function infoDia(f) {
   const d = parseDia(f), finde = d.getDay() === 0 || d.getDay() === 6;
   const nl = noLaborables(d.getFullYear()).find(([x]) => x === f);
-  const pedidos = db.trabajo.ausencias.filter(a => !esFestivo(a) && a.desde <= f && a.hasta >= f);
-  let cls = '';
+  const pedidos = db.trabajo.ausencias.filter(a => a.desde <= f && a.hasta >= f);
+  let cls = '', medio = false;
   if (nl) cls = 'nac';
   else if (finde) cls = 'fin';
-  else if (pedidos.length) cls = CLASE_ESTADO[estadoReal(pedidos[0])] || 'ok';
-  return { f, d, finde, nl, pedidos, cls };
+  else if (pedidos.length) { cls = CLASE_ESTADO[estadoReal(pedidos[0])] || 'ok'; medio = !!pedidos[0].medio; }
+  return { f, d, finde, nl, pedidos, cls: cls + (medio ? ' medio' : ''), medio };
 }
 // En la vista mensual, los huecos de la primera y la última semana se rellenan con los días del mes anterior
 // y del siguiente, en tono apagado (como el calendario de Windows). En la anual se dejan en blanco.
@@ -573,8 +562,11 @@ function viewMes() {
   const { y, m } = calCursor();
   // Resumen del mes: días laborables libres (pedidos o planificados) que caen en él
   let ok = 0, pend = 0, plan = 0;
-  for (let i = 1; i <= new Date(y, m + 1, 0).getDate(); i++) { const c = infoDia(dayKey(new Date(y, m, i))).cls; if (c === 'ok') ok++; else if (c === 'pend') pend++; else if (c === 'plan') plan++; }
-  const resumen = [ok && plural(ok, 'día libre', 'días libres'), pend && `${pend} sin aprobar`, plan && plural(plan, 'planificado', 'planificados')].filter(Boolean).join(' · ');
+  for (let i = 1; i <= new Date(y, m + 1, 0).getDate(); i++) {
+    const info = infoDia(dayKey(new Date(y, m, i))), c = info.cls.split(' ')[0], v = info.medio ? .5 : 1;
+    if (c === 'ok') ok += v; else if (c === 'pend') pend += v; else if (c === 'plan') plan += v;
+  }
+  const resumen = [ok && plural(ok, 'día libre', 'días libres'), pend && `${num(pend)} sin aprobar`, plan && plural(plan, 'planificado', 'planificados')].filter(Boolean).join(' · ');
   return `<div class="calnav"><button class="iconbtn" data-act="calPrev" aria-label="Mes anterior">${I.left}</button>
       <button class="serif" data-act="calHoy" style="font-size:21px">${mesNombre(m)} <span class="red">${y}</span></button>
       <button class="iconbtn" data-act="calNext" aria-label="Mes siguiente">${I.right}</button></div>
@@ -597,7 +589,7 @@ function openDia(f) {
   else if (info.finde) lineas.push(`<div class="row"><i class="d fin sw"></i><div class="main"><div class="name">Fin de semana</div></div></div>`);
   for (const a of info.pedidos) {
     const e = estadoReal(a);
-    lineas.push(`<button class="row" data-act="edit" data-id="${a.id}"><i class="d ${CLASE_ESTADO[e]} sw"></i><div class="main"><div class="name">${esc(a.nombre || TIPOS_AUS[a.tipo]?.n)}</div><div class="sub">${rangoTxt(a)} · ${ESTADOS[e]}${descuenta(a) ? ` · días de ${añoDe(a)}` : ''}</div></div><span class="chev">›</span></button>`);
+    lineas.push(`<button class="row" data-act="edit" data-id="${a.id}"><i class="d ${CLASE_ESTADO[e]}${a.medio ? ' medio' : ''} sw"></i><div class="main"><div class="name">${esc(a.nombre || TIPOS_AUS[a.tipo]?.n)}</div><div class="sub">${rangoTxt(a)}${a.medio ? ' · medio día' : ''} · ${ESTADOS[e]}${descuenta(a) ? ` · días de ${añoDe(a)}` : ''}</div></div><span class="chev">›</span></button>`);
   }
   if (!lineas.length) lineas.push(`<div class="row"><i class="d sw"></i><div class="main"><div class="name">Día laborable</div></div></div>`);
   const puedePedir = !info.nl && !info.finde && !info.pedidos.length;
@@ -799,9 +791,7 @@ const mainActions = {
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
   editAus: t => { const a = aus(t.dataset.id); if (a) openAusForm(a); },
   newAus: () => openAusForm(null),
-  pedirFestivo: t => { const a = aus(t.dataset.id); if (a) openAusForm(null, { desde: a.desde, hasta: a.desde, nombre: a.nombre, 'año': +a.desde.slice(0, 4) }); },
   toggleNoLab: () => { ui.verNoLab = !ui.verNoLab; render(); },
-  toggleFest: () => { ui.verFest = !ui.verFest; render(); },
   vistaTrabajo: t => { ui.vistaTrabajo = t.dataset.v; render(); },
   calPrev: () => { calCursor(); if (--ui.calM < 0) { ui.calM = 11; ui.calY--; } render(); },
   calNext: () => { calCursor(); if (++ui.calM > 11) { ui.calM = 0; ui.calY++; } render(); },
@@ -811,8 +801,6 @@ const mainActions = {
   abrirMes: t => { ui.calM = +t.dataset.m; ui.vistaTrabajo = 'mes'; render(); window.scrollTo(0, 0); },
   dia: t => openDia(t.dataset.f),
   verDias: t => { if (db.trabajo['año'] !== +t.dataset.y) { db.trabajo['año'] = +t.dataset.y; save(); } ui.tab = 'trabajo'; render(); window.scrollTo(0, 0); },
-  newFestivo: () => openAusForm(null, { tipo: 'festivo_local' }),
-  cargarFestivos: () => cargarFestivos(),
   editTotales: () => openTotales(),
   pickAño: () => {
     const y = new Date().getFullYear(), cur = db.trabajo['año'];
