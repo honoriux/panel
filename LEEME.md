@@ -61,7 +61,7 @@ La pestaña **Gastos** muestra el resumen del mes de SaveyCustom: lo gastado fre
 
 Cada día a la hora que elijas (por defecto, las 7:00 de España) te llega un WhatsApp con las tareas de hoy, las vencidas y las que se acercan, **solo si hay algo**. Lleva únicamente títulos y fechas, nunca notas. Lo envía una GitHub Action de `panel-data` (`.github/workflows/avisos.yml` y `scripts/`) con [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/).
 
-La hora y cuándo salen las tareas con aviso y las vencidas se eligen en ⚙️ **Configuración → Avisos por WhatsApp**: *Todos los días*, *Hitos* (al entrar en su aviso, a 7 días y a 1 día; las vencidas, el día siguiente y cada lunes) o *Personalizado*. Las de hoy salen siempre.
+La hora y cuándo salen las tareas con aviso y las vencidas se eligen en ⚙️ **Configuración → Avisos por WhatsApp**: *Todos los días*, *Hitos* (al entrar en su aviso, a 7 días y a 1 día; las vencidas, el día siguiente y cada lunes) o *Personalizado*. Las de hoy salen siempre. Las tareas sin fecha salen al final del mensaje los lunes, y también se puede elegir cada día o nunca.
 
 **Una sola vez:**
 1. Si no tienes ya tu `apikey` de CallMeBot: añade a tus contactos el número que indica su web, mándale por WhatsApp el mensaje de activación que pone allí y te contestará con tu `apikey`.

@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.10';
+const APP_VERSION = 'panel-2026-11-19.11';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -21,7 +21,7 @@ function defaultDB() {
     tareas: [],
     trabajo: { u: 0, 'año': new Date().getFullYear(), vacacionesTotales: 24, ausencias: [] }, // 22 de vacaciones + 2 de libre disposición
     // Configuración de los avisos por WhatsApp: la lee la Action diaria de panel-data (scripts/avisos.mjs)
-    avisos: { u: 0, modo: 'diario', hitos: [7, 1], entrar: true, vencidas: 'lunes', hora: 7 },
+    avisos: { u: 0, modo: 'diario', hitos: [7, 1], entrar: true, vencidas: 'lunes', hora: 7, sinFecha: 'lunes' },
     deleted: {},
     // Ajustes locales del dispositivo: no se sincronizan
     settings: { theme: 'auto', lastBackup: null },
@@ -773,8 +773,9 @@ const MODOS_AVISO = {
   personalizado: { n: 'Personalizado', d: 'Tú eliges en qué días antes avisar y cada cuánto recordar las vencidas.' },
 };
 const VENCIDAS_AVISO = { diario: 'Cada día', lunes: 'El día siguiente y cada lunes', primer_dia: 'Solo el día siguiente' };
+const SIN_FECHA_AVISO = { lunes: 'Cada lunes', diario: 'Cada día', nunca: 'Nunca' };
 function openAvisos() {
-  const a = db.avisos, f = { modo: a.modo, hitosTxt: (a.hitos || []).join(', '), entrar: a.entrar !== false, vencidas: a.vencidas || 'lunes', hora: a.hora ?? 7 };
+  const a = db.avisos, f = { modo: a.modo, hitosTxt: (a.hitos || []).join(', '), entrar: a.entrar !== false, vencidas: a.vencidas || 'lunes', hora: a.hora ?? 7, sinFecha: SIN_FECHA_AVISO[a.sinFecha] ? a.sinFecha : 'lunes' };
   const estado = () => {
     const e = estadoAvisos();
     if (!e) return '';
@@ -794,9 +795,12 @@ function openAvisos() {
         <div class="field"><label>Días antes en que avisar (separados por comas)</label><input data-input="hitos" inputmode="numeric" value="${esc(f.hitosTxt)}" placeholder="Ej. 30, 15, 7, 1"></div>
         <button class="set-row" data-act="entrar"><span class="t">Avisar también el día que entra en su aviso</span><span class="switch ${f.entrar ? 'on' : ''}"></span></button>
         <div class="frow"><span>Vencidas</span><span class="v">${VENCIDAS_AVISO[f.vencidas]} ›</span><select class="overlay" data-on="vencidas">${Object.entries(VENCIDAS_AVISO).map(([k, l]) => `<option value="${k}" ${k === f.vencidas ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}
+      <div class="frow" style="margin-top:14px"><span>Tareas sin fecha</span><span class="v">${SIN_FECHA_AVISO[f.sinFecha]} ›</span><select class="overlay" data-on="sinFecha">${Object.entries(SIN_FECHA_AVISO).map(([k, l]) => `<option value="${k}" ${k === f.sinFecha ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <p class="small">${f.sinFecha === 'nunca' ? 'Las tareas sin fecha no salen en el mensaje.' : `Al final del mensaje, ${f.sinFecha === 'lunes' ? 'los lunes' : 'cada día'}, para que no se te olviden. Si las hay, ese día llega el mensaje aunque no haya nada más.`}</p>
       <div class="form-foot"><button class="btn navy" data-act="save">Guardar</button></div>`,
     actions: {
       modo: (t, s) => { f.modo = t.dataset.m; s.refresh(); },
+      sinFecha: (t, s) => { f.sinFecha = t.value; s.refresh(); },
       hitos: t => f.hitosTxt = t.value,
       entrar: (t, s) => { f.entrar = !f.entrar; s.refresh(); },
       vencidas: (t, s) => { f.vencidas = t.value; s.refresh(); },
@@ -804,7 +808,7 @@ function openAvisos() {
       save: (t, s) => {
         const hitos = [...new Set(f.hitosTxt.split(/[^0-9]+/).filter(Boolean).map(Number).filter(n => n >= 1 && n <= 365))].sort((x, y) => y - x);
         if (f.modo === 'personalizado' && !hitos.length && !f.entrar) return toast('Pon algún día o activa el aviso al entrar');
-        Object.assign(db.avisos, f.modo === 'personalizado' ? { modo: f.modo, hitos, entrar: f.entrar, vencidas: f.vencidas } : { modo: f.modo }, { hora: f.hora });
+        Object.assign(db.avisos, f.modo === 'personalizado' ? { modo: f.modo, hitos, entrar: f.entrar, vencidas: f.vencidas } : { modo: f.modo }, { hora: f.hora, sinFecha: f.sinFecha });
         save(); s.close(); render(); sheets.forEach(x => x.live && x.refresh()); toast('Avisos guardados');
       },
     },

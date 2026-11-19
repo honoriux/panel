@@ -26,7 +26,7 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
     "festivos": { "2026": 3 },
     "ausencias": [{ "id": "", "u": 0, "tipo": "vacaciones|asuntos_propios|otro", "nombre": "", "desde": "", "hasta": "", "estado": "por_pedir|pedido|aprobado|disfrutado", "año": 2026, "medio": false }]
   },
-  "avisos": { "u": 0, "modo": "diario|hitos|personalizado", "hitos": [7, 1], "entrar": true, "vencidas": "diario|lunes|primer_dia", "hora": 7 },
+  "avisos": { "u": 0, "modo": "diario|hitos|personalizado", "hitos": [7, 1], "entrar": true, "vencidas": "diario|lunes|primer_dia", "hora": 7, "sinFecha": "lunes|diario|nunca" },
   "deleted": {}
 }
 ```
@@ -51,7 +51,7 @@ La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data
 - Ficheros en `panel-data`: `.github/workflows/avisos.yml`, `scripts/avisos.mjs` (lee, decide la hora y envía) y `scripts/avisos-logica.mjs` (qué sale en el mensaje; sin dependencias, se puede probar en el navegador).
 - Hora: `avisos.hora` (0–23, hora de España, por defecto 7). El cron corre cada hora (minuto 7) y el script solo sigue si en España ya es esa hora o más tarde y hoy aún no consta un aviso bueno: así cubre retrasos y ejecuciones saltadas de GitHub, y si falla lo reintenta cada hora ese día. `workflow_dispatch` = prueba (envía ya, aunque no haya nada).
 - Estado: cada intento que toca se guarda en `avisos-estado.json` de `panel-data` (`{ programado: { fecha, hora, ok, detalle, intentos }, prueba: {…} }`) con el `GITHUB_TOKEN` de la Action. La app lo lee al sincronizar (solo lectura, guardado aparte en `panel.avisos.estado`) y muestra el banner ⚠️ en Inicio si el último falló o si, 2 horas después de la hora, no consta el aviso del día; el resultado se ve también en Configuración → Avisos por WhatsApp.
-- `avisos.modo` (Configuración → Avisos por WhatsApp): `diario` (vencidas y dentro de aviso, cada día), `hitos` (al entrar en su aviso, a 7 y a 1 día; vencidas el día siguiente y cada lunes) o `personalizado` (`hitos` = días antes, `entrar`, `vencidas`). Las de hoy salen siempre. La app y `avisos-logica.mjs` deben aplicar las mismas reglas.
+- `avisos.modo` (Configuración → Avisos por WhatsApp): `diario` (vencidas y dentro de aviso, cada día), `hitos` (al entrar en su aviso, a 7 y a 1 día; vencidas el día siguiente y cada lunes) o `personalizado` (`hitos` = días antes, `entrar`, `vencidas`). Las de hoy salen siempre. Las tareas sin fecha van en una sección aparte al final según `avisos.sinFecha` (por defecto `lunes`; también `diario` o `nunca`), en cualquier modo. La app y `avisos-logica.mjs` deben aplicar las mismas reglas.
 
 ## Integración de Savey (fase 6)
 - Una sola app. La pestaña **Gastos** es el **Inicio de Savey** (lo que Álvaro usa a diario: apuntar el gasto con el botón +). Un desplegable dentro de Gastos lleva al resto de pantallas de Savey (línea temporal, ideas, presupuestos, cuentas), siempre dentro de Gastos. Configuración tiene un apartado propio para Savey.
