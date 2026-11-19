@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.19';
+const APP_VERSION = 'panel-2026-11-19.20';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -205,7 +205,9 @@ const tarea = id => db.tareas.find(t => t.id === id);
 // Domingo de esta semana (la semana empieza en lunes)
 const finSemana = () => { const d = new Date(); d.setDate(d.getDate() + (7 - d.getDay()) % 7); return dayKey(d); };
 const porTarea = (a, b) => (a.fecha || '9999').localeCompare(b.fecha || '9999') || ORDEN_PRIO[a.prioridad] - ORDEN_PRIO[b.prioridad] || (a.creada || '').localeCompare(b.creada || '');
-const cumpleFiltro = (t, f) => !f || f === 'todas' || (f === 'repite' ? !!t.repite : t.ambito === f);
+// Los cumpleaños (de Google Calendar) van en Periódicas, en su sección; en «Todas» solo cuando ya están dentro de su aviso, y nunca en Personal
+const esCumple = t => t.tipo === 'cumple';
+const cumpleFiltro = (t, f) => !f || (f === 'todas' ? !esCumple(t) || enAviso(t) : f === 'repite' ? !!t.repite : t.ambito === f && !esCumple(t));
 const pendientes = filtro => db.tareas.filter(t => t.estado !== 'hecha' && cumpleFiltro(t, filtro)).sort(porTarea);
 const textoRepite = r => !r ? '' : r.cada === 1 ? CADA_UNO[r.unidad] : `Cada ${r.cada} ${UNIDADES[r.unidad]?.[1] || ''}`;
 // Ya dentro de su ventana de aviso (o vencida)
@@ -254,10 +256,10 @@ function tareaRow(t, conAmbito = false) {
   return `<div class="row ${hecha ? 'done' : ''}"><button class="check ${hecha ? 'on' : ''}" data-act="toggleTarea" data-id="${t.id}" aria-label="${hecha ? 'Marcar como pendiente' : 'Marcar como hecha'}"></button>
     <button class="rowmain" data-act="editTarea" data-id="${t.id}"><div class="main"><div class="name"><span class="dot" style="background:${PRIORIDADES[t.prioridad]?.color}"></span>${ic}${esc(t.titulo)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${tag}</button></div>`;
 }
-function gruposTareas(list, conAmbito) {
+function gruposTareas(list, conAmbito, sinFechaArriba = false) {
   const h = hoy(), fs = finSemana();
-  const g = [['Vencidas', t => t.fecha && t.fecha < h], ['Hoy', t => t.fecha === h], ['Esta semana', t => t.fecha && t.fecha > h && t.fecha <= fs],
-    ['Se acerca', t => t.fecha && t.fecha > fs && enAviso(t)], ['Más adelante', t => t.fecha && t.fecha > fs && !enAviso(t)], ['Sin fecha', t => !t.fecha]];
+  const g = [...(sinFechaArriba ? [['Sin fecha', t => !t.fecha]] : []), ['Vencidas', t => t.fecha && t.fecha < h], ['Hoy', t => t.fecha === h], ['Esta semana', t => t.fecha && t.fecha > h && t.fecha <= fs],
+    ['Se acerca', t => t.fecha && t.fecha > fs && enAviso(t)], ['Más adelante', t => t.fecha && t.fecha > fs && !enAviso(t)], ...(sinFechaArriba ? [] : [['Sin fecha', t => !t.fecha]])];
   return g.map(([titulo, f]) => { const l = list.filter(f); return l.length ? `<div class="grp">${titulo}</div>${l.map(t => tareaRow(t, conAmbito)).join('')}` : ''; }).join('');
 }
 function viewTareas() {
@@ -266,7 +268,10 @@ function viewTareas() {
   const pend = pendientes(filtro);
   const hechas = db.tareas.filter(t => t.estado === 'hecha' && cumpleFiltro(t, filtro)).sort((a, b) => (b.u || 0) - (a.u || 0));
   const vacio = filtro === 'repite' ? 'No tienes tareas periódicas.<br>ITV, DNI, seguros, garantías, recibos… ponles fecha y repetición.' : `No tienes tareas pendientes${filtro !== 'todas' ? ' de ' + AMBITOS[filtro].toLowerCase() : ''}.`;
-  return `${seg}${pend.length ? gruposTareas(pend, filtro === 'todas' || filtro === 'repite') : `<div class="empty-state">${vacio}<br>Pulsa <b>+</b> para añadir.</div>`}
+  // En Periódicas, los cumpleaños aparte, al final y por fecha
+  const cumples = filtro === 'repite' ? pend.filter(esCumple) : [], resto = filtro === 'repite' ? pend.filter(t => !esCumple(t)) : pend;
+  const secCumples = cumples.length ? `<div class="grp">🎂 Cumpleaños</div>${cumples.map(t => tareaRow(t)).join('')}` : '';
+  return `${seg}${pend.length ? gruposTareas(resto, filtro === 'todas' || filtro === 'repite', true) + secCumples : `<div class="empty-state">${vacio}<br>Pulsa <b>+</b> para añadir.</div>`}
     ${hechas.length ? `<button class="fold" data-act="toggleCompletadas">${ui.verCompletadas ? '▾' : '▸'} Completadas (${hechas.length})</button>${ui.verCompletadas ? hechas.map(t => tareaRow(t, filtro === 'todas')).join('') : ''}` : ''}`;
 }
 
