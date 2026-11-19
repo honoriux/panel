@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.20';
+const APP_VERSION = 'panel-2026-11-19.21';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -782,6 +782,14 @@ function openSheet({ render, actions = {}, cls = '', onRender }) {
     s.actions[name]?.(t, s, ev);
   };
   s.el.addEventListener('click', handle);
+  // En el ordenador, el calendario de un campo de fecha solo se abre pulsando su icono (invisible aquí): se abre al pulsar cualquier parte de la fila.
+  // Solo con ratón: en el iPhone el selector ya se abre solo al tocar.
+  let tipoPuntero = '';
+  s.el.addEventListener('pointerdown', ev => { tipoPuntero = ev.pointerType; }, true);
+  s.el.addEventListener('click', ev => {
+    const d = ev.target.closest('input[type=date]');
+    if (d && tipoPuntero === 'mouse' && d.showPicker) try { d.showPicker(); } catch (e) { }
+  });
   s.el.addEventListener('change', handle);
   s.el.addEventListener('input', ev => {
     const t = ev.target.closest('[data-input]'); if (t) return s.actions[t.dataset.input]?.(t, s, ev);
