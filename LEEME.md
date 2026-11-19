@@ -51,13 +51,15 @@ Cuando el token caduque verás un aviso en Inicio y en Configuración. Crea uno 
 
 ## 4. Gastos (Savey)
 
-La pestaña **Gastos** es Savey entero: su Inicio para apuntar con el botón **+**, y en el menú **☰** de arriba a la izquierda el resto de pantallas (Línea temporal, Ideas, Presupuestos, Cuentas) y Recurrente, Editar cuentas y Categorías. Desliza a los lados para cambiar de mes y toca el mes para volver al actual. Sus datos siguen en `savey-data`, aparte de los de Panel.
+La pestaña **Gastos** es Savey entero: su Inicio para apuntar con el botón **+**, y en el menú **☰** de arriba a la izquierda el resto de pantallas (Línea temporal, Ideas, Cuentas) y Recurrente, Editar cuentas y Categorías. Desliza a los lados para cambiar de mes y toca el mes para volver al actual. Sus datos siguen en `savey-data`, aparte de los de Panel.
 
 **Una sola vez**, crea un token para Savey en Panel: [Fine-grained tokens → Generate new token](https://github.com/settings/personal-access-tokens/new), nombre `panel-savey`, *Only select repositories* → `savey-data`, *Contents*: **Read and write**. (También vale el que usa SaveyCustom.) El token de solo lectura `panel-gastos` ya no hace falta: puedes borrarlo en GitHub.
 
 **En cada dispositivo:** ⚙️ **Configuración → Savey → Sincronizar entre dispositivos**, con tu usuario, `savey-data` y ese token. Como en Panel aún no hay movimientos, se descargan los de GitHub tal cual. El token se queda solo en el dispositivo.
 
 En **Configuración → Savey** están también la moneda y demás preferencias, las copias mensuales, la copia de seguridad y restaurar (los mismos archivos que SaveyCustom) y exportar o importar CSV.
+
+**Cuentas que no son tu dinero** (préstamos y similares): en la cuenta, desactiva **Es mi dinero**. Las transferencias entre tus cuentas (por ejemplo, de la principal a la remunerada) no cuentan como ingreso ni gasto; lo que pasas a una cuenta que no es tuya cuenta como gasto, y lo que te llega de ella, como ingreso. Salen en Inicio e Ideas como «→ Préstamo» o «← Préstamo». El valor neto suma todas las cuentas: si te prestan dinero, esa cuenta queda en negativo y el valor neto no sube. Edita las cuentas desde Panel: SaveyCustom no conoce esta opción.
 
 SaveyCustom puede seguir instalada mientras pruebas: las dos sincronizan con `savey-data` y no se pisan ni duplican los recurrentes. Cuando lo tengas claro, puedes borrarla del iPhone.
 

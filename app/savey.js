@@ -3,7 +3,9 @@
    para que sus nombres (db, ui, render, sync…) no choquen con los de Panel, con estos cambios:
    - Datos, sincronización e interfaz con claves propias (panel.savey.*): no se mezclan con los de Panel.
    - Usa las hojas (openSheet/closeSheet), los avisos (toast) y el modo claro/oscuro de Panel.
-   - Sus pantallas (Inicio, Línea temporal, Ideas, Presupuestos y Cuentas) se eligen con el menú ☰, dentro de Gastos.
+   - Sus pantallas (Inicio, Línea temporal, Ideas y Cuentas) se eligen con el menú ☰, dentro de Gastos. Sin Presupuestos
+     (sus datos se conservan tal cual en savey-data, para SaveyCustom).
+   - Cada cuenta puede ser «tu dinero» o no (préstamos…): ver tipoEfectivo().
    - Su configuración es el apartado Savey de la de Panel.
    Sincroniza con savey-data (su propio token, de lectura y escritura). Nunca escribe en panel-data.
    Panel usa lo que devuelve al final: view, top, actions, nuevo, swipe… */
@@ -136,6 +138,26 @@ const inMonth = (iso, y, m) => { const d = new Date(iso); return d.getFullYear()
 const cat = id => db.categories.find(c => c.id === id);
 const acc = id => db.accounts.find(a => a.id === id);
 const soft = (hex, a = .2) => hex + Math.round(a * 255).toString(16).padStart(2, '0');
+/* Cuentas que son tu dinero (personal, por defecto) y las que no (préstamos…). Una transferencia entre dos cuentas tuyas
+   no es ni ingreso ni gasto; de una tuya a una que no lo es cuenta como gasto, y al revés como ingreso.
+   Se agrupa por la otra cuenta ('acc:<id>:expense|income'), como si fuera una categoría. */
+const esMia = id => acc(id)?.personal !== false;
+function tipoEfectivo(t) {
+  if (t.type === 'income' || t.type === 'expense') return t.type;
+  if (t.type !== 'transfer') return null;
+  const de = esMia(t.acc), a = esMia(t.to);
+  return de && !a ? 'expense' : !de && a ? 'income' : null;
+}
+const claveGrupo = t => {
+  if (t.type !== 'transfer') return t.cat;
+  const tipo = tipoEfectivo(t);
+  return `acc:${tipo === 'expense' ? t.to : t.acc}:${tipo}`;
+};
+function grupo(id) {
+  if (!id?.startsWith('acc:')) return cat(id);
+  const [, accId, tipo] = id.split(':'), a = acc(accId);
+  return a && { ...a, name: (tipo === 'expense' ? '→ ' : '← ') + a.name, type: tipo };
+}
 const ico = (item, cls = '') => `<span class="ico ${cls}" style="background:${soft(item?.color || '#7a7f8c', .22)}">${item?.icon || '❔'}</span>`;
 const TRANSFER_ICON = { icon: '🔁', color: '#5b8def' };
 const ADJUST_ICON = { icon: '⚖️', color: '#7a7f8c' };
@@ -160,17 +182,20 @@ function monthTx(y, m, accId = ui.acc) {
 function monthStats(y, m, accId = ui.acc) {
   let inc = 0, exp = 0;
   for (const t of monthTx(y, m, accId)) {
-    if (t.type === 'income') inc += t.amount;
-    else if (t.type === 'expense') exp += t.amount;
+    const tipo = tipoEfectivo(t);
+    if (tipo === 'income') inc += t.amount;
+    else if (tipo === 'expense') exp += t.amount;
   }
   return { inc, exp, bal: inc - exp };
 }
 function groupByCat(list) {
   const g = {};
   for (const t of list) {
-    if (t.type !== 'income' && t.type !== 'expense') continue;
-    (g[t.cat] ||= { cat: cat(t.cat), type: t.type, total: 0, n: 0, id: t.cat }).total += t.amount;
-    g[t.cat].n++;
+    const tipo = tipoEfectivo(t);
+    if (!tipo) continue;
+    const k = claveGrupo(t);
+    (g[k] ||= { cat: grupo(k), type: tipo, total: 0, n: 0, id: k }).total += t.amount;
+    g[k].n++;
   }
   return Object.values(g).sort((a, b) => (a.type === b.type ? b.total - a.total : a.type === 'income' ? -1 : 1));
 }
@@ -250,7 +275,7 @@ function view() {
   if (ui.acc !== 'all' && !acc(ui.acc)) ui.acc = 'all';
   if (!PANTALLAS[ui.tab]) ui.tab = 'home';
   saveUi();
-  const v = { home: viewHome, timeline: viewTimeline, ideas: viewIdeas, budgets: viewBudgets, accounts: viewAccounts }[ui.tab];
+  const v = { home: viewHome, timeline: viewTimeline, ideas: viewIdeas, accounts: viewAccounts }[ui.tab];
   return `<div class="sv">${v()}</div>`;
 }
 function top() {
@@ -302,7 +327,7 @@ function viewHome() {
 
 function txRow(t) {
   let item, name, sub = t.note || '', cls = '', amt = t.amount;
-  if (t.type === 'transfer') { item = TRANSFER_ICON; name = 'Transferencia'; sub = `${acc(t.acc)?.name || '?'} → ${acc(t.to)?.name || '?'}${t.note ? ' · ' + t.note : ''}`; cls = 'muted'; }
+  if (t.type === 'transfer') { item = TRANSFER_ICON; name = 'Transferencia'; sub = `${acc(t.acc)?.name || '?'} → ${acc(t.to)?.name || '?'}${t.note ? ' · ' + t.note : ''}`; cls = { expense: '', income: 'green' }[tipoEfectivo(t)] ?? 'muted'; }
   else if (t.type === 'adjust') { item = ADJUST_ICON; name = 'Ajuste de saldo'; sub = acc(t.acc)?.name || ''; cls = 'muted'; }
   else { item = cat(t.cat); name = item?.name || '¿?'; if (t.type === 'income') cls = 'green'; }
   const amtTxt = t.type === 'adjust' ? money(amt, { sign: true }) : money(amt);
@@ -352,45 +377,10 @@ function viewIdeas() {
     : `<div class="empty-state">No hay ${type === 'income' ? 'ingresos' : 'gastos'} este mes.</div>`}${yearBtn}`;
 }
 
-function budgetBar(spent, limit) {
-  const p = limit ? spent / limit : (spent ? 2 : 0);
-  return `<div class="bar ${p > 1 ? 'over' : p > .85 ? 'warn' : ''}"><div style="width:${Math.min(p, 1) * 100}%"></div></div>`;
-}
-function viewBudgets() {
-  const all = db.transactions.filter(t => inMonth(t.date, ui.y, ui.m));
-  let inc = 0, exp = 0; const byCat = {};
-  for (const t of all) {
-    if (t.type === 'income') inc += t.amount;
-    if (t.type === 'expense') { exp += t.amount; byCat[t.cat] = (byCat[t.cat] || 0) + t.amount; }
-  }
-  const mode = db.budgets.mode;
-  const general = mode === 'income' ? inc : (db.budgets.general || 0);
-  const left = general - exp;
-  const cats = Object.entries(db.budgets.cats).filter(([id]) => cat(id)).map(([id, lim]) => ({ c: cat(id), lim, spent: byCat[id] || 0 }))
-    .sort((a, b) => b.spent / b.lim - a.spent / a.lim);
-  const del = (act, id = '') => `<button class="iconbtn" style="width:30px;height:30px;color:var(--muted)" data-act="${act}" data-cat="${id}" aria-label="Eliminar presupuesto">${I.close}</button>`;
-  const generalCard = mode === 'none' ? '' : `<div class="bcard" data-act="editGeneral">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="serif" style="font-size:19px;flex:1">Presupuesto general</span><span class="small">${mode === 'income' ? 'según ingresos' : 'cantidad fija'}</span>${del('delGeneral')}</div>
-      ${budgetBar(exp, general)}
-      <div class="brow"><span>Gastado ${money(exp)} de ${money(general)}</span><span class="${left < 0 ? 'red' : 'green'}">${left < 0 ? 'Te pasas ' + money(-left) : 'Quedan ' + money(left)}</span></div>
-    </div>`;
-  const catCards = cats.map(({ c, lim, spent }) => `<div class="bcard" data-act="editBudget" data-cat="${c.id}">
-      <div style="display:flex;align-items:center;gap:10px">${ico(c)}<span style="flex:1">${esc(c.name)}</span><span class="small">${Math.round(spent / lim * 100)}%</span>${del('delBudget', c.id)}</div>
-      ${budgetBar(spent, lim)}
-      <div class="brow"><span>${money(spent)} de ${money(lim)}</span><span class="${lim - spent < 0 ? 'red' : ''}">${lim - spent < 0 ? 'Te pasas ' + money(spent - lim) : 'Quedan ' + money(lim - spent)}</span></div></div>`).join('');
-  if (!generalCard && !catCards) return `<div class="empty-state">No tienes presupuestos.<br>Puedes poner un límite de gasto para todo el mes o para una categoría concreta.</div>
-    <button class="addcard" data-act="editGeneral" style="margin-bottom:12px">+ Presupuesto general</button>
-    <button class="addcard" data-act="addBudget">+ Presupuesto por categoría</button>`;
-  return `${generalCard || `<button class="addcard" data-act="editGeneral" style="margin-bottom:12px">+ Presupuesto general</button>`}
-    <h2 class="sec">Por categoría</h2>
-    ${catCards || `<div class="empty-state" style="padding:16px">Aún no tienes presupuestos por categoría.</div>`}
-    <button class="addcard" data-act="addBudget">+ Añadir presupuesto</button>`;
-}
-
 function viewAccounts() {
   const b = balances();
   return `<div class="networth"><div class="v">${money(netWorth())}</div><div class="small">Valor neto</div></div>
-    ${db.accounts.map(a => `<button class="acard" data-act="editAcc" data-id="${a.id}"><div><div class="n">${esc(a.name)}</div><div class="b">${money(b[a.id] || 0)}</div></div>
+    ${db.accounts.map(a => `<button class="acard" data-act="editAcc" data-id="${a.id}"><div><div class="n">${esc(a.name)}${a.personal === false ? ' <span class="small">· no es tu dinero</span>' : ''}</div><div class="b">${money(b[a.id] || 0)}</div></div>
       <span class="sq" style="background:${soft(a.color, .25)}">${a.icon}</span></button>`).join('')}
     <button class="addcard" data-act="newAcc">+ Toque para agregar una cuenta</button>
     <div style="margin-top:16px"><button class="btn blue" style="width:100%" data-act="newTransfer">⇄ Realizar una transferencia</button></div>`;
@@ -547,11 +537,11 @@ function openTxForm(existing, mode = 'tx', preset = {}) {
 
 /* ---------------- Detalle de categoría ---------------- */
 function openCatDetail(catId) {
-  const c = cat(catId);
+  const c = grupo(catId);
   openSheet({
     cls: 'full',
     render: () => {
-      const list = monthTx(ui.y, ui.m).filter(t => t.cat === catId && (t.type === 'income' || t.type === 'expense'));
+      const list = monthTx(ui.y, ui.m).filter(t => tipoEfectivo(t) && claveGrupo(t) === catId);
       const total = list.reduce((a, t) => a + t.amount, 0);
       return `${head(esc(c?.name || ''), `${MONTHS_L[ui.m]} ${ui.y} · ${money(total)}`)}${list.length ? dayGroups(list) : '<div class="empty-state">Sin movimientos.</div>'}
         <button class="row" data-act="history" style="justify-content:center;border:0;color:var(--accent);margin-top:12px">Ver evolución de los últimos 12 meses ›</button>`;
@@ -571,11 +561,11 @@ function bars(rows) {
     </div><span style="text-align:right">${money(r.a)}</span></div>`).join('');
 }
 function openHistory(catId) {
-  const c = cat(catId);
+  const c = grupo(catId);
   const rows = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(ui.y, ui.m - i, 1);
-    const a = monthTx(d.getFullYear(), d.getMonth()).filter(t => t.cat === catId && t.type === c.type).reduce((s, t) => s + t.amount, 0);
+    const a = monthTx(d.getFullYear(), d.getMonth()).filter(t => tipoEfectivo(t) && claveGrupo(t) === catId).reduce((s, t) => s + t.amount, 0);
     rows.push({ label: `${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, a, color: c.color });
   }
   const avg = rows.reduce((s, r) => s + r.a, 0) / 12;
@@ -604,7 +594,7 @@ function openYearSummary() {
 function openAccountEdit(a) {
   const isNew = !a;
   const cur = isNew ? 0 : (balances()[a.id] || 0);
-  const f = { name: a?.name || '', icon: a?.icon || '💳', color: a?.color || COLORS[1], bal: centsToInput(cur) };
+  const f = { name: a?.name || '', icon: a?.icon || '💳', color: a?.color || COLORS[1], bal: centsToInput(cur), personal: a ? a.personal !== false : true };
   openSheet({
     cls: 'full',
     render: () => `${head(isNew ? 'Nueva cuenta' : 'Editar cuenta')}
@@ -612,11 +602,13 @@ function openAccountEdit(a) {
       <div class="field"><label>Nombre</label><input data-input="name" value="${esc(f.name)}" placeholder="Ej. Cuenta Principal"></div>
       <div class="field"><label>${isNew ? 'Saldo inicial' : 'Saldo actual'}</label><input data-input="bal" inputmode="decimal" value="${esc(f.bal)}"></div>
       ${isNew ? '' : '<div class="small" style="padding-top:6px">Si cambias el saldo actual se crea un movimiento de «Ajuste de saldo» por la diferencia (no cuenta como ingreso ni gasto).</div>'}
+      <button class="set-row" data-act="personal"><span class="t">Es mi dinero<div class="small">${f.personal ? 'Las transferencias entre tus cuentas no cuentan como ingreso ni gasto.' : 'Lo que transfieras a esta cuenta cuenta como gasto, y lo que llegue de ella, como ingreso. Para préstamos y similares.'}</div></span><span class="switch ${f.personal ? 'on' : ''}"></span></button>
       <div class="field"><label>Color</label><div class="swatches">${COLORS.map(c => `<button class="${c === f.color ? 'on' : ''}" style="background:${c}" data-act="color" data-c="${c}"></button>`).join('')}</div></div>
       <div class="field"><label>Icono</label><div class="emojis">${EMOJIS.map(e => `<button class="${e === f.icon ? 'on' : ''}" data-act="emoji" data-e="${e}">${e}</button>`).join('')}</div></div>
       <div class="form-foot">${isNew ? '' : '<button class="btn ghost" data-act="del">Eliminar</button>'}<button class="btn navy" data-act="save">Guardar</button></div>`,
     actions: {
       name: t => f.name = t.value, bal: t => f.bal = t.value,
+      personal: (t, s) => { f.personal = !f.personal; s.refresh(); },
       color: (t, s) => { f.color = t.dataset.c; s.refresh(); },
       emoji: (t, s) => { f.icon = t.dataset.e; s.refresh(); },
       del: (t, s) => {
@@ -630,9 +622,9 @@ function openAccountEdit(a) {
         if (!f.name.trim()) return toast('Pon un nombre');
         const bal = toCents(f.bal || '0');
         if (isNaN(bal)) return toast('Saldo no válido');
-        if (isNew) db.accounts.push({ id: uid(), name: f.name.trim(), icon: f.icon, color: f.color, initial: bal });
+        if (isNew) db.accounts.push({ id: uid(), name: f.name.trim(), icon: f.icon, color: f.color, initial: bal, personal: f.personal });
         else {
-          Object.assign(a, { name: f.name.trim(), icon: f.icon, color: f.color });
+          Object.assign(a, { name: f.name.trim(), icon: f.icon, color: f.color, personal: f.personal });
           if (bal !== cur) db.transactions.push({ id: uid(), type: 'adjust', amount: bal - cur, cat: null, acc: a.id, to: null, date: new Date().toISOString(), note: '' });
         }
         save(); s.close(); render();
@@ -738,41 +730,6 @@ function openRecurringList() {
       add: () => openTxForm(null, 'tx', { freq: 'month' }),
     },
     onRender: () => { },
-  });
-}
-
-/* ---------------- Presupuestos ---------------- */
-function openBudgetEdit(catId) {
-  const c = cat(catId);
-  let val = db.budgets.cats[catId] ? centsToInput(db.budgets.cats[catId]) : '';
-  openSheet({
-    render: () => `${head('Presupuesto mensual')}<div style="display:flex;align-items:center;gap:10px;padding:12px 0">${ico(c)}<b>${esc(c.name)}</b></div>
-      <div class="field"><label>Límite al mes (${CURRENCIES[db.settings.currency]})</label><input data-input="v" inputmode="decimal" value="${esc(val)}" placeholder="0"></div>
-      <div class="form-foot">${db.budgets.cats[catId] ? '<button class="btn ghost" data-act="del">Quitar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`,
-    actions: {
-      v: t => val = t.value,
-      del: (t, s) => { delete db.budgets.cats[catId]; save(); s.close(); render(); },
-      save: (t, s) => { const v = toCents(val); if (!v || v < 0) return toast('Importe no válido'); db.budgets.cats[catId] = v; save(); s.close(); render(); },
-    },
-    onRender: s => setTimeout(() => s.el.querySelector('input')?.focus(), 300),
-  });
-}
-function openGeneralBudget() {
-  const had = db.budgets.mode !== 'none';
-  let mode = had ? db.budgets.mode : 'income', val = db.budgets.general ? centsToInput(db.budgets.general) : '';
-  openSheet({
-    render: () => `${head('Presupuesto general')}
-      <div class="seg lg" style="margin:10px 0"><button class="${mode === 'income' ? 'on income' : ''}" data-act="m" data-m="income">Según ingresos del mes</button><button class="${mode === 'fixed' ? 'on expense' : ''}" data-act="m" data-m="fixed">Cantidad fija</button></div>
-      ${mode === 'fixed' ? `<div class="field"><label>Cantidad al mes</label><input data-input="v" inputmode="decimal" value="${esc(val)}"></div>` : '<div class="small">El presupuesto de cada mes será lo que hayas ingresado ese mes.</div>'}
-      <div class="form-foot">${had ? '<button class="btn ghost" data-act="del">Quitar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`,
-    actions: {
-      m: (t, s) => { mode = t.dataset.m; s.refresh(); }, v: t => val = t.value,
-      del: (t, s) => { db.budgets.mode = 'none'; save(); s.close(); render(); },
-      save: (t, s) => {
-        if (mode === 'fixed') { const v = toCents(val || '0'); if (!v || v < 0) return toast('Importe no válido'); db.budgets.general = v; }
-        db.budgets.mode = mode; save(); s.close(); render();
-      },
-    },
   });
 }
 
@@ -917,7 +874,7 @@ function exportCsv() {
 }
 
 /* ---------------- Menú ☰: pantallas de Savey (siempre dentro de la pestaña Gastos) ---------------- */
-const PANTALLAS = { home: ['Inicio', 'home'], timeline: ['Línea temporal', 'list'], ideas: ['Ideas', 'ideas'], budgets: ['Presupuestos', 'budget'], accounts: ['Cuentas', 'wallet'] };
+const PANTALLAS = { home: ['Inicio', 'home'], timeline: ['Línea temporal', 'list'], ideas: ['Ideas', 'ideas'], accounts: ['Cuentas', 'wallet'] };
 function openMenu() {
   openSheet({
     render: () => `${head('Gastos')}<div class="menu-list">
@@ -951,18 +908,6 @@ const mainActions = {
   editAcc: t => openAccountEdit(acc(t.dataset.id)),
   newAcc: () => openAccountEdit(null),
   newTransfer: () => openTxForm(null, 'tx', { type: 'transfer' }),
-  editGeneral: () => openGeneralBudget(),
-  editBudget: t => openBudgetEdit(t.dataset.cat),
-  delGeneral: () => { if (!confirm('¿Quitar el presupuesto general?')) return; db.budgets.mode = 'none'; save(); render(); },
-  delBudget: t => {
-    if (!confirm(`¿Quitar el presupuesto de ${cat(t.dataset.cat)?.name || 'esta categoría'}?`)) return;
-    delete db.budgets.cats[t.dataset.cat]; save(); render();
-  },
-  addBudget: () => {
-    const free = db.categories.filter(c => c.type === 'expense' && !db.budgets.cats[c.id]);
-    if (!free.length) return toast('Todas las categorías tienen presupuesto');
-    pickList('Elige categoría', free.map(c => [c.id, `${c.icon} ${esc(c.name)}`]), null, id => openBudgetEdit(id));
-  },
   backup: () => exportBackup(),
 };
 /* ---------------- Sincronización con un repositorio privado de GitHub ----------------
