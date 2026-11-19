@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.4';
+const APP_VERSION = 'panel-2026-11-19.5';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -372,12 +372,29 @@ function noLaborables(y) {
   return _noLab[y] = l;
 }
 const esNoLaborable = f => noLaborables(+f.slice(0, 4)).some(([x]) => x === f);
-// Festivos (locales + autonómicos) que da la empresa cada año, si no se ha puesto otro número en la app.
-// 2026: 1 local + 2 autonómicos, según el resumen de vacaciones de la empresa (año del cambio de Madrid a Sevilla).
-// 2027: los 5 de Sevilla que caen entre semana y no son nacionales (Día de Andalucía, Jueves Santo, Feria, Corpus
-// y traslado de la Asunción; Decreto 84/2026, BOJA 05/05/2026, y calendario de la empresa).
-const FESTIVOS_DEFECTO = { 2026: 3, 2027: 5 };
-const festivosAño = y => db.trabajo.festivos?.[y] ?? FESTIVOS_DEFECTO[y] ?? 0;
+// Festivos de Sevilla que la empresa da como días a pedir (locales + autonómicos que no son fiesta nacional),
+// calculados para cualquier año con las reglas fijas de Sevilla y Andalucía:
+// - Locales: miércoles de Feria (Domingo de Resurrección + 17) y Corpus Christi (+ 60).
+// - Autonómicos: Jueves Santo, Día de Andalucía (28/2; si cae en domingo pasa al lunes, si cae en sábado se pierde)
+//   y el lunes siguiente a cada fiesta nacional que caiga en domingo (Andalucía siempre las traslada).
+// Comprobado con el BOJA y el calendario de la empresa: 2026 y 2027 dan 5 (2028, por ejemplo, 4).
+function festivosSevilla(y) {
+  const p = pascua(y), mas = n => { const d = new Date(p); d.setDate(d.getDate() + n); return dayKey(d); };
+  const l = [[mas(-3), 'Jueves Santo', 'autonómico'], [mas(17), 'Miércoles de Feria', 'local'], [mas(60), 'Corpus Christi', 'local']];
+  const and = new Date(y, 1, 28);
+  if (and.getDay() === 0) l.push([dayKey(new Date(y, 2, 1)), 'Día de Andalucía (traslado)', 'autonómico']);
+  else if (and.getDay() !== 6) l.push([dayKey(and), 'Día de Andalucía', 'autonómico']);
+  for (const [md, n] of NACIONALES) {
+    const d = parseDia(`${y}-${md}`);
+    if (d.getDay() === 0) { d.setDate(d.getDate() + 1); l.push([dayKey(d), `${n} (traslado)`, 'autonómico']); }
+  }
+  return l.sort((a, b) => a[0].localeCompare(b[0]));
+}
+// Excepciones al cálculo: 2026 fue el año del cambio de sede de Madrid a Sevilla y la empresa dio 1 local + 2 autonómicos.
+const FESTIVOS_DEFECTO = { 2026: 3 };
+const festivosCalculo = y => FESTIVOS_DEFECTO[y] ?? festivosSevilla(y).length;
+// Lo que se usa: el número puesto a mano en la app para ese año o, si no hay, el calculado
+const festivosAño = y => db.trabajo.festivos?.[y] ?? festivosCalculo(y);
 
 // Días laborables de un periodo: de lunes a viernes, sin fiestas nacionales ni días de empresa.
 function diasLaborables(desde, hasta) {
@@ -498,15 +515,19 @@ function openAusForm(existing, preset = {}) {
     },
   });
 }
-// Días libres: vacaciones + libre disposición (igual todos los años) y festivos de la empresa del año que se está viendo
+// Días libres: vacaciones + libre disposición (igual todos los años) y festivos de la empresa del año que se está viendo.
+// Si el número de festivos coincide con el calculado, no se guarda a mano: así sigue calculándose solo.
 function openTotales() {
-  const y = db.trabajo['año'];
+  const y = db.trabajo['año'], calc = festivosCalculo(y), lista = festivosSevilla(y);
   let v = String(db.trabajo.vacacionesTotales ?? ''), fv = String(festivosAño(y));
   openSheet({
+    cls: 'full',
     render: () => `${head('Días libres', String(y))}
       <div class="field"><label>Vacaciones + libre disposición (cada año)</label><input data-input="v" inputmode="numeric" value="${esc(v)}" placeholder="Ej. 24"></div>
       <div class="field"><label>Festivos locales y autonómicos que da la empresa en ${y}</label><input data-input="fv" inputmode="numeric" value="${esc(fv)}" placeholder="Ej. 5"></div>
-      <p class="small">Míralo en el resumen de vacaciones de la app de tu empresa (Festivo local + Festivo autonómico). Las fiestas nacionales y el 24 y 31 de diciembre no cuentan.</p>
+      <p class="small">${FESTIVOS_DEFECTO[y] != null ? `En ${y} la empresa dio ${calc} por el cambio de sede (en Sevilla serían ${lista.length}).` : `Calculados para Sevilla en ${y}: <b>${lista.length}</b>. Cámbialo solo si tu empresa da otro número (lo ves en su resumen de vacaciones).`}</p>
+      ${lista.map(([f, n, k]) => `<div class="row"><div class="main"><div class="name">${esc(n)}</div><div class="sub">${DAYS[parseDia(f).getDay()]}, ${fmtDia(f)} · ${k}</div></div></div>`).join('')}
+      <p class="small">Las fiestas nacionales y el 24 y 31 de diciembre no cuentan: no se piden.</p>
       <div class="form-foot"><button class="btn navy" data-act="save">Guardar</button></div>`,
     actions: {
       v: t => v = t.value, fv: t => fv = t.value,
@@ -514,7 +535,9 @@ function openTotales() {
         const n = parseInt(v, 10), nf = parseInt(fv, 10);
         if (!(n >= 0 && n <= 99) || !(nf >= 0 && nf <= 20)) return toast('Número no válido');
         db.trabajo.vacacionesTotales = n;
-        db.trabajo.festivos = { ...(db.trabajo.festivos || {}), [y]: nf };
+        const fest = { ...(db.trabajo.festivos || {}) };
+        if (nf === calc) delete fest[y]; else fest[y] = nf;
+        db.trabajo.festivos = fest;
         save(); s.close(); render();
       },
     },
