@@ -80,11 +80,12 @@ GitHub lo lanza cada hora con unos minutos de retraso; si un envío falla, lo re
 
 ## Qué hace (por ahora)
 
-- **Inicio**: las tareas vencidas, las de hoy o de esta semana, las que ya han entrado en su aviso (en rojo) y las que no tienen fecha. Debajo, los días libres que te quedan este año (y los del anterior, si aún te quedan).
+- **Inicio**: las tareas vencidas, las de hoy o de esta semana, las que ya han entrado en su aviso (en rojo) y las que no tienen fecha. Debajo, las listas marcadas para Inicio que tienen algo apuntado y los días libres que te quedan este año (y los del anterior, si aún te quedan).
 - **Tareas**: todas juntas, también las periódicas como renovaciones y caducidades (antes estaban en una pestaña aparte). Cada una puede tener fecha, prioridad, ámbito (personal o trabajo), icono y notas, y si tiene fecha:
   - **Se repite** cada N días, semanas, meses o años: al marcarla como hecha se crea sola la siguiente (si ibas con retraso, la primera fecha que aún no ha pasado). Sirve para la ITV, el DNI o los seguros, y también para recibos o tareas periódicas.
   - **Avisar** con N días de antelación: desde entonces aparece en Inicio y con la etiqueta en rojo. Sin aviso, aparece la semana que toca.
   - Filtros: todas, personal, trabajo y «periódicas». Toca el círculo para completarla; las completadas quedan plegadas.
+- **Listas**: para lo que no es una tarea pero no quieres olvidar (la compra, lo que pedir por AliExpress, ideas de regalos…). Crea las listas que quieras, con nombre e icono, y marca **Mostrar en Inicio** en las que quieras tener a mano: salen en Inicio mientras tengan algo apuntado. Dentro de una lista, escribe arriba y pulsa Intro para ir apuntando seguido; toca una cosa para ponerle una nota, moverla a otra lista o borrarla. Lo que tachas baja plegado a **Tachados** y desaparece con **Quitar tachados**. Volver a tocar la pestaña Listas te lleva al resumen.
 - **Trabajo**:
   - Las tareas de trabajo pendientes.
   - **Días libres del año**: una sola bolsa con las vacaciones y la libre disposición (24 por defecto) más los festivos locales y autonómicos de Sevilla de ese año, que se calculan solos para cualquier año (miércoles de Feria, Corpus, Jueves Santo, Día de Andalucía y los lunes que sustituyen a fiestas nacionales en domingo): 5 en 2027, 4 en 2028… En 2026 son 3 por el cambio de sede. En **Editar** ves las fechas calculadas y puedes poner otro número si un año tu empresa da otro. Muestra totales, disfrutados, pedidos y restantes, en días laborables: no cuentan fines de semana, fiestas nacionales ni el 24 y 31 de diciembre. Una petición aprobada cuenta sola como disfrutada cuando pasa su fecha.
@@ -92,7 +93,8 @@ GitHub lo lanza cada hora con unos minutos de retraso; si un envío falla, lo re
   - **No laborables**: las fiestas nacionales y los días de empresa del año, plegados, solo para consultar.
   - **Calendario** (selector Lista / Mes / Año): el calendario laboral con colores. Gris para el fin de semana, rojo para las fiestas nacionales y los días de empresa, verde para lo aprobado o disfrutado, amarillo para lo pedido y sin aprobar, y azul con borde discontinuo para lo planificado sin pedir. Los medios días se ven con media casilla coloreada. Hoy va marcado con un círculo. Toca un día para ver qué es y pedirlo; en la vista anual, toca un mes para abrirlo. Desliza a izquierda o derecha para cambiar de mes (o de año, en la vista anual), y toca el nombre del mes o el año para volver al actual.
 - **Gastos**: resumen del mes de SaveyCustom, solo lectura (ver el apartado 4).
-- **Botón +**: en Inicio y Tareas crea una tarea; en Trabajo te pregunta qué.
+- **Botón +**: en Inicio y Tareas crea una tarea; en Listas te pregunta en qué lista apuntar (o crea una nueva); en Trabajo te pregunta qué.
+- **Pestañas**, de izquierda a derecha: Tareas, Listas, Inicio, Gastos y Trabajo. Al abrir la app, Inicio.
 
 ## Actualizar la app
 

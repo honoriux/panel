@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.11';
+const APP_VERSION = 'panel-2026-11-19.12';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -19,6 +19,9 @@ function defaultDB() {
     version: 1,
     caducidades: [],
     tareas: [],
+    // Listas sueltas (compra, AliExpress, regalos…) y lo apuntado en ellas
+    listas: [],
+    elementos: [],
     trabajo: { u: 0, 'año': new Date().getFullYear(), vacacionesTotales: 24, ausencias: [] }, // 22 de vacaciones + 2 de libre disposición
     // Configuración de los avisos por WhatsApp: la lee la Action diaria de panel-data (scripts/avisos.mjs)
     avisos: { u: 0, modo: 'diario', hitos: [7, 1], entrar: true, vencidas: 'lunes', hora: 7, sinFecha: 'lunes' },
@@ -44,6 +47,8 @@ function normalize() {
   // Tareas y caducidades están unificadas: las caducidades (de copias antiguas u otro dispositivo sin actualizar) pasan a tareas
   migrarCaducidades(db);
   for (const t of db.tareas) { if (t.repite === undefined) t.repite = null; if (t.avisoDias === undefined) t.avisoDias = null; if (t.tipo === undefined) t.tipo = null; }
+  db.listas = db.listas || [];
+  db.elementos = db.elementos || [];
   db.trabajo = Object.assign(d.trabajo, db.trabajo || {});
   db.trabajo.ausencias = db.trabajo.ausencias || [];
   // Los festivos ya no son fechas sino un número por año (trabajo.festivos). Los antiguos se eliminan
@@ -65,7 +70,7 @@ function saveRaw() {
 
 /* Seguimiento de cambios por registro (como en Savey): cada registro lleva "u" (última modificación)
    y los borrados quedan en db.deleted. Así, cuando llegue la sincronización, no hará falta migrar nada. */
-const LISTS = [d => d.caducidades, d => d.tareas, d => d.trabajo.ausencias];
+const LISTS = [d => d.caducidades, d => d.tareas, d => d.trabajo.ausencias, d => d.listas, d => d.elementos];
 const trabajoCab = () => { const { u, ausencias, ...rest } = db.trabajo; return JSON.stringify(rest); };
 const avisosCab = () => { const { u, ...rest } = db.avisos || {}; return JSON.stringify(rest); };
 let snap = new Map();
@@ -121,11 +126,11 @@ function toast(msg) {
 /* ---------------- Estado de la interfaz ---------------- */
 const UI_KEY = 'panel.ui';
 const ui = { tab: 'home' };
-try { // recuerda pestaña y filtro de tareas entre recargas
+try { // recuerda pestaña, filtro de tareas y lista abierta entre recargas
   const saved = JSON.parse(localStorage.getItem(UI_KEY)) || {};
-  for (const k of ['tab', 'filtroTareas', 'vistaTrabajo']) if (saved[k]) ui[k] = saved[k];
+  for (const k of ['tab', 'filtroTareas', 'vistaTrabajo', 'lista']) if (saved[k]) ui[k] = saved[k];
 } catch (e) { }
-function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tab: ui.tab, filtroTareas: ui.filtroTareas, vistaTrabajo: ui.vistaTrabajo })); } catch (e) { } }
+function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tab: ui.tab, filtroTareas: ui.filtroTareas, vistaTrabajo: ui.vistaTrabajo, lista: ui.lista })); } catch (e) { } }
 
 /* ---------------- Iconos SVG ---------------- */
 const svg = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
@@ -147,16 +152,18 @@ const I = {
   home: svg('<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h4.5v-5h3v5H18V9.5"/>'),
   check: svg('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>'),
   chart: svg('<path d="M3 17l5-6 4 3 6-8 3 3"/><path d="M3 21h18"/>'),
+  list: svg('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>'),
   briefcase: svg('<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/><path d="M3 12.5h18"/>'),
 };
 
 /* ---------------- Pestañas ----------------
    "fab" es lo que hace el botón + en esa pestaña (Gastos no tiene: es solo lectura). */
 const TABS = [
-  { k: 'home', label: 'Inicio', icon: I.home, title: 'Inicio', view: viewHome, fab: () => openTareaForm(null) },
   { k: 'tareas', label: 'Tareas', icon: I.check, title: 'Tareas', view: viewTareas, fab: () => openTareaForm(null, { ambito: ui.filtroTareas === 'trabajo' ? 'trabajo' : 'personal' }) },
-  { k: 'trabajo', label: 'Trabajo', icon: I.briefcase, title: 'Trabajo', view: viewTrabajo, fab: () => pickList('Añadir', [['tarea', '☑️ Tarea de trabajo'], ['aus', '🏖️ Pedir días']], null, v => v === 'tarea' ? openTareaForm(null, { ambito: 'trabajo' }) : openAusForm(null)) },
+  { k: 'listas', label: 'Listas', icon: I.list, get title() { const l = ui.lista && lista(ui.lista); return l ? esc(l.nombre) : 'Listas'; }, view: viewListas, fab: () => fabListas() },
+  { k: 'home', label: 'Inicio', icon: I.home, title: 'Inicio', view: viewHome, fab: () => openTareaForm(null) },
   { k: 'gastos', label: 'Gastos', icon: I.chart, title: 'Gastos', view: viewGastos, fab: null },
+  { k: 'trabajo', label: 'Trabajo', icon: I.briefcase, title: 'Trabajo', view: viewTrabajo, fab: () => pickList('Añadir', [['tarea', '☑️ Tarea de trabajo'], ['aus', '🏖️ Pedir días']], null, v => v === 'tarea' ? openTareaForm(null, { ambito: 'trabajo' }) : openAusForm(null)) },
 ];
 const tabOf = k => TABS.find(t => t.k === (k === 'cad' ? 'tareas' : k)) || TABS[0]; // 'cad' era la antigua pestaña Caducidades
 
@@ -167,7 +174,7 @@ function render() {
   applyTheme();
   $('#topbar').innerHTML = `<span></span><div class="pagetitle">${tab.title}</div><button class="iconbtn" data-act="settings" aria-label="Configuración">${I.gear}</button>`;
   $('#tabbar').innerHTML = TABS.map(t => `<button class="${t.k === tab.k ? 'on' : ''}" data-act="tab" data-tab="${t.k}">${t.icon}<span>${t.label}</span></button>`).join('');
-  $('#fab').hidden = !tab.fab;
+  $('#fab').hidden = !tab.fab || (tab.k === 'listas' && !!ui.lista); // dentro de una lista se apunta en el campo de arriba
   $('#view').innerHTML = tab.view();
   sheets.forEach(s => s.live && s.refresh());
 }
@@ -273,7 +280,10 @@ function viewHome() {
   const y = new Date().getFullYear(), conDatos = a => db.trabajo.ausencias.some(x => añoDe(x) === a || x.desde.startsWith(String(a)));
   const dias = [y - 1, y].filter(a => a === y ? (conDatos(a) || db.trabajo.vacacionesTotales) : conDatos(a) && contadorDias(a).restantes > 0);
   const libres = dias.length ? `<h2 class="sec">Días libres</h2>${dias.map(a => tarjetaDias(a, true)).join('')}` : '';
-  return `${backupBanner()}${avisosBanner()}${pend}${libres}`;
+  // Listas marcadas para Inicio que tienen algo apuntado
+  const enInicio = listasOrden().filter(l => l.inicio && quedan(l.id));
+  const listas = enInicio.length ? `<h2 class="sec">Listas</h2>${enInicio.map(l => listaRow(l, true)).join('')}` : '';
+  return `${backupBanner()}${avisosBanner()}${pend}${listas}${libres}`;
 }
 
 function openTareaForm(existing, preset = {}) {
@@ -337,6 +347,113 @@ function openTareaForm(existing, preset = {}) {
     },
     // Cursor en «Tarea» solo al crear una nueva (no en cada redibujado: en iPhone sacaría el teclado una y otra vez)
     onRender: s => { if (!isEdit && !s.enfocado) { s.enfocado = true; setTimeout(() => s.el.querySelector('[data-input=titulo]')?.focus(), 300); } },
+  });
+}
+
+/* ---------------- Listas (compra, AliExpress, regalos…) ----------------
+   No son tareas: cosas sueltas que se apuntan para no olvidarlas. Dos colecciones, sincronizadas registro a registro:
+   - db.listas: { id, u, nombre, icono, inicio (mostrar en Inicio), creada (ms, para el orden) }
+   - db.elementos: { id, u, lista, texto, nota, hecho, creado (ms, para el orden) }
+   Lo tachado se queda plegado al final hasta que se quita con «Quitar tachados». */
+const ICONOS_LISTA = ['🛒', '📦', '🎁', '🎅', '🏠', '💊', '🧰', '👕', '📚', '✈️', '🍽️', '📝'];
+const lista = id => db.listas.find(l => l.id === id);
+const elemento = id => db.elementos.find(e => e.id === id);
+const listasOrden = () => [...db.listas].sort((a, b) => (a.creada || 0) - (b.creada || 0));
+const quedan = id => db.elementos.filter(e => e.lista === id && !e.hecho).length;
+const cosasTxt = n => n ? plural(n, 'cosa', 'cosas') : 'Vacía';
+const listaRow = (l, enInicio = false) => `<button class="row" data-act="abrirLista" data-id="${l.id}"><span class="ico" style="background:var(--line)">${l.icono || '📝'}</span><div class="main"><div class="name">${esc(l.nombre)}</div><div class="sub">${cosasTxt(quedan(l.id))}${!enInicio && l.inicio ? ' · en Inicio' : ''}</div></div><span class="chev">›</span></button>`;
+const elementoRow = e => `<div class="row ${e.hecho ? 'done' : ''}"><button class="check ${e.hecho ? 'on' : ''}" data-act="toggleElemento" data-id="${e.id}" aria-label="${e.hecho ? 'Quitar el tachado' : 'Tachar'}"></button>
+  <button class="rowmain" data-act="editElemento" data-id="${e.id}"><div class="main"><div class="name">${esc(e.texto)}</div>${e.nota ? `<div class="sub">${esc(e.nota)}</div>` : ''}</div></button></div>`;
+
+function viewListas() {
+  const l = ui.lista && lista(ui.lista);
+  if (!l) {
+    ui.lista = null;
+    const ls = listasOrden();
+    return ls.length ? `${ls.map(x => listaRow(x)).join('')}<button class="fold" data-act="nuevaLista" style="margin-top:6px">＋ Nueva lista</button>`
+      : `<div class="empty-state">Para lo que no es una tarea pero no quieres olvidar: la compra, lo que pedir por AliExpress, ideas de regalos…<br>Pulsa <b>+</b> para crear tu primera lista.</div>`;
+  }
+  const items = db.elementos.filter(e => e.lista === l.id);
+  const pend = items.filter(e => !e.hecho).sort((a, b) => (a.creado || 0) - (b.creado || 0));
+  const hechos = items.filter(e => e.hecho).sort((a, b) => (b.u || 0) - (a.u || 0));
+  const borrador = ui.borrador?.lista === l.id ? ui.borrador.texto : '';
+  return `<div class="lista-cab"><button class="link" data-act="cerrarLista">‹ Listas</button><button class="link" data-act="editLista">Editar lista</button></div>
+    <div class="field lista-add"><input id="addItem" data-lista="${l.id}" value="${esc(borrador)}" placeholder="Añadir a ${esc(l.nombre)}…" enterkeyhint="done" autocomplete="off" autocapitalize="sentences"></div>
+    ${pend.length ? pend.map(elementoRow).join('') : `<div class="empty-state" style="padding:22px 10px">${hechos.length ? 'Todo tachado.' : 'No hay nada apuntado.'}<br>Escribe arriba y pulsa Intro para añadir.</div>`}
+    ${hechos.length ? `<button class="fold" data-act="toggleTachados">${ui.verTachados ? '▾' : '▸'} Tachados (${hechos.length})</button>${ui.verTachados ? hechos.map(elementoRow).join('') : ''}
+      <button class="link" data-act="quitarTachados">Quitar tachados</button>` : ''}`;
+}
+// Apunta lo escrito en el campo de arriba y deja el cursor ahí para seguir apuntando
+function añadirElemento(inp) {
+  const texto = inp.value.trim(), l = lista(inp.dataset.lista);
+  if (!texto || !l) return;
+  db.elementos.push({ id: uid(), lista: l.id, texto, nota: '', hecho: false, creado: Date.now() });
+  ui.borrador = null; save(); render();
+  $('#addItem')?.focus();
+}
+function abrirLista(id, enfocar = false) {
+  ui.tab = 'listas'; ui.lista = id; ui.verTachados = false; render(); window.scrollTo(0, 0);
+  if (enfocar) $('#addItem')?.focus();
+}
+function fabListas() {
+  const ls = listasOrden();
+  if (!ls.length) return openListaForm(null);
+  pickList('Apuntar en…', [...ls.map(l => [l.id, `${l.icono || '📝'} ${esc(l.nombre)}`]), ['__nueva', '＋ Nueva lista']], null, v => v === '__nueva' ? openListaForm(null) : abrirLista(v, true));
+}
+
+function openListaForm(existing) {
+  const isEdit = !!existing;
+  const f = existing ? { nombre: existing.nombre, icono: existing.icono || '📝', inicio: !!existing.inicio } : { nombre: '', icono: '🛒', inicio: false };
+  openSheet({
+    cls: 'full',
+    render: () => `${head(isEdit ? 'Editar lista' : 'Nueva lista')}
+      <div class="field"><label>Nombre</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="Ej. Compra, AliExpress o Regalos Mamá"></div>
+      <div class="field"><label>Icono</label></div>
+      <div class="iconos">${ICONOS_LISTA.map(ic => `<button class="${f.icono === ic ? 'on' : ''}" data-act="icono" data-v="${ic}">${ic}</button>`).join('')}</div>
+      <button class="set-row" data-act="inicio"><span class="t">Mostrar en Inicio<div class="small">Sale en Inicio mientras tenga algo apuntado.</div></span><span class="switch ${f.inicio ? 'on' : ''}"></span></button>
+      <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">${isEdit ? 'Guardar' : 'Crear lista'}</button></div>`,
+    actions: {
+      nombre: t => f.nombre = t.value,
+      icono: (t, s) => { f.icono = t.dataset.v; s.refresh(); },
+      inicio: (t, s) => { f.inicio = !f.inicio; s.refresh(); },
+      save: (t, s) => {
+        if (!f.nombre.trim()) return toast('Ponle un nombre a la lista');
+        const d = { nombre: f.nombre.trim(), icono: f.icono, inicio: f.inicio };
+        if (isEdit) { Object.assign(existing, d); save(); s.close(); render(); return toast('Lista guardada'); }
+        const id = uid();
+        db.listas.push({ id, ...d, creada: Date.now() });
+        save(); s.close(); abrirLista(id, true); toast('Lista creada');
+      },
+      del: (t, s) => {
+        const n = db.elementos.filter(e => e.lista === existing.id).length;
+        if (!confirm(`¿Eliminar la lista «${existing.nombre}»${n ? ` y ${plural(n, 'cosa apuntada', 'cosas apuntadas')}` : ''}?`)) return;
+        db.listas = db.listas.filter(x => x.id !== existing.id);
+        db.elementos = db.elementos.filter(e => e.lista !== existing.id);
+        ui.lista = null; save(); s.close(); render(); toast('Lista eliminada');
+      },
+    },
+    onRender: s => { if (!isEdit && !s.enfocado) { s.enfocado = true; setTimeout(() => s.el.querySelector('[data-input=nombre]')?.focus(), 300); } },
+  });
+}
+
+function openElementoForm(e) {
+  const f = { texto: e.texto, nota: e.nota || '', lista: e.lista };
+  openSheet({
+    render: () => `${head('Editar')}
+      <div class="field"><label>Qué</label><input data-input="texto" value="${esc(f.texto)}"></div>
+      <textarea class="note" rows="2" placeholder="Nota (opcional)…" data-input="nota">${esc(f.nota)}</textarea>
+      ${db.listas.length > 1 ? `<div class="frow"><span>Lista</span><span class="v">${esc(lista(f.lista)?.nombre || '')} ›</span><select class="overlay" data-on="lista">${listasOrden().map(l => `<option value="${l.id}" ${l.id === f.lista ? 'selected' : ''}>${l.icono || '📝'} ${esc(l.nombre)}</option>`).join('')}</select></div>` : ''}
+      <div class="form-foot"><button class="btn ghost" data-act="del">Eliminar</button><button class="btn navy" data-act="save">Guardar</button></div>`,
+    actions: {
+      texto: t => f.texto = t.value, nota: t => f.nota = t.value,
+      lista: (t, s) => { f.lista = t.value; s.refresh(); },
+      save: (t, s) => {
+        if (!f.texto.trim()) return toast('Escribe qué es');
+        Object.assign(e, { texto: f.texto.trim(), nota: f.nota.trim(), lista: f.lista });
+        save(); s.close(); render(); toast(f.lista !== ui.lista ? `Movido a ${lista(f.lista)?.nombre}` : 'Guardado');
+      },
+      del: (t, s) => { db.elementos = db.elementos.filter(x => x.id !== e.id); save(); s.close(); render(); toast('Eliminado'); },
+    },
   });
 }
 
@@ -863,7 +980,7 @@ function backupBanner() {
 
 /* ---------------- Acciones de la vista principal ---------------- */
 const mainActions = {
-  tab: t => { ui.tab = t.dataset.tab; render(); window.scrollTo(0, 0); if (ui.tab === 'gastos') cargarGastos(); },
+  tab: t => { if (t.dataset.tab === 'listas' && ui.tab === 'listas') ui.lista = null; ui.tab = t.dataset.tab; render(); window.scrollTo(0, 0); if (ui.tab === 'gastos') cargarGastos(); },
   gastosSetup: () => openGastosSetup(),
   avisosSetup: () => openAvisos(),
   gastosRefresh: () => cargarGastos(true),
@@ -874,6 +991,18 @@ const mainActions = {
   toggleTarea: t => { const x = tarea(t.dataset.id); if (x) toggleTarea(x); },
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
   editAus: t => { const a = aus(t.dataset.id); if (a) openAusForm(a); },
+  abrirLista: t => abrirLista(t.dataset.id),
+  cerrarLista: () => { ui.lista = null; render(); window.scrollTo(0, 0); },
+  nuevaLista: () => openListaForm(null),
+  editLista: () => { const l = lista(ui.lista); if (l) openListaForm(l); },
+  toggleElemento: t => { const e = elemento(t.dataset.id); if (!e) return; e.hecho = !e.hecho; save(); render(); },
+  editElemento: t => { const e = elemento(t.dataset.id); if (e) openElementoForm(e); },
+  toggleTachados: () => { ui.verTachados = !ui.verTachados; render(); },
+  quitarTachados: () => {
+    const n = db.elementos.filter(e => e.lista === ui.lista && e.hecho).length;
+    if (!n || !confirm(`¿Quitar ${plural(n, 'cosa tachada', 'cosas tachadas')} de la lista?`)) return;
+    db.elementos = db.elementos.filter(e => !(e.lista === ui.lista && e.hecho)); save(); render(); toast('Tachados quitados');
+  },
   newAus: () => openAusForm(null),
   toggleNoLab: () => { ui.verNoLab = !ui.verNoLab; render(); },
   vistaTrabajo: t => { ui.vistaTrabajo = t.dataset.v; render(); },
@@ -900,6 +1029,13 @@ document.addEventListener('click', ev => {
   if (ev.target.closest('#fab')) return tabOf(ui.tab).fab?.();
   const t = ev.target.closest('[data-act]');
   if (t) mainActions[t.dataset.act]?.(t, ev);
+});
+// Campo para apuntar en una lista: Intro añade; lo escrito se guarda como borrador por si se redibuja la vista
+document.addEventListener('keydown', ev => {
+  if (ev.target.id === 'addItem' && ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); añadirElemento(ev.target); }
+});
+document.addEventListener('input', ev => {
+  if (ev.target.id === 'addItem') ui.borrador = { lista: ev.target.dataset.lista, texto: ev.target.value };
 });
 document.addEventListener('change', ev => {
   if (ev.target.closest('.sheet-wrap')) return;
@@ -946,13 +1082,13 @@ const b64enc = s => {
 const b64dec = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, '')), c => c.charCodeAt(0)));
 
 // Lo que se sube a GitHub: los datos, sin los ajustes locales del dispositivo
-const syncPayload = d => ({ version: 1, caducidades: d.caducidades, tareas: d.tareas, trabajo: d.trabajo, avisos: d.avisos, deleted: d.deleted || {} });
+const syncPayload = d => ({ version: 1, caducidades: d.caducidades, tareas: d.tareas, listas: d.listas || [], elementos: d.elementos || [], trabajo: d.trabajo, avisos: d.avisos, deleted: d.deleted || {} });
 const esDePanel = d => d && Array.isArray(d.caducidades) && Array.isArray(d.tareas) && d.trabajo && Array.isArray(d.trabajo.ausencias);
 // Representación ordenada por id, para comparar contenidos sin que importe el orden
 function canon(d) {
   const p = syncPayload(d), byId = l => [...(l || [])].sort((a, b) => a.id < b.id ? -1 : 1);
   const { ausencias, ...cab } = p.trabajo || {};
-  return JSON.stringify({ c: byId(p.caducidades), t: byId(p.tareas), w: cab, a: byId(ausencias), v: p.avisos || null, d: Object.keys(p.deleted).sort().map(k => [k, p.deleted[k]]) });
+  return JSON.stringify({ c: byId(p.caducidades), t: byId(p.tareas), l: byId(p.listas), e: byId(p.elementos), w: cab, a: byId(ausencias), v: p.avisos || null, d: Object.keys(p.deleted).sort().map(k => [k, p.deleted[k]]) });
 }
 // Combina registro a registro: gana la versión modificada más recientemente; los borrados se respetan.
 // La cabecera de Trabajo (año, días totales) y la configuración de avisos ganan enteras según su "u".
@@ -973,7 +1109,7 @@ function mergeData(L, R) {
   const Lt = L.trabajo || {}, Rt = R.trabajo || {};
   const { ausencias: _a, ...cab } = (Rt.u || 0) > (Lt.u || 0) ? Rt : Lt;
   const avisos = (R.avisos?.u || 0) > (L.avisos?.u || 0) ? R.avisos : L.avisos;
-  return { ...L, caducidades: mergeList(L.caducidades, R.caducidades), tareas: mergeList(L.tareas, R.tareas), trabajo: { ...cab, ausencias: mergeList(Lt.ausencias, Rt.ausencias) }, avisos, deleted: del };
+  return { ...L, caducidades: mergeList(L.caducidades, R.caducidades), tareas: mergeList(L.tareas, R.tareas), listas: mergeList(L.listas, R.listas), elementos: mergeList(L.elementos, R.elementos), trabajo: { ...cab, ausencias: mergeList(Lt.ausencias, Rt.ausencias) }, avisos, deleted: del };
 }
 
 async function gh(path, opts = {}, cfg = sync) {

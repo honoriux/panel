@@ -19,6 +19,8 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
   "caducidades": [],
   "tareas": [{ "id": "", "u": 0, "titulo": "", "ambito": "personal|trabajo", "fecha": null, "prioridad": "alta|media|baja", "estado": "pendiente|hecha", "notas": "", "creada": "",
                "repite": null, "avisoDias": null, "tipo": null }],
+  "listas": [{ "id": "", "u": 0, "nombre": "", "icono": "🛒", "inicio": false, "creada": 0 }],
+  "elementos": [{ "id": "", "u": 0, "lista": "", "texto": "", "nota": "", "hecho": false, "creado": 0 }],
   "trabajo": {
     "u": 0,
     "año": 2026,
@@ -36,15 +38,17 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
 - Fechas en `AAAA-MM-DD` (día local, sin hora, para evitar desfases UTC). Importes en céntimos, como en Savey.
 
 ## Secciones
-1. **Inicio**: tareas vencidas, de hoy, de esta semana, las que ya están dentro de su `avisoDias` y las que no tienen fecha; días libres que quedan del año.
+Orden de las pestañas, de izquierda a derecha: Tareas, Listas, Inicio, Gastos, Trabajo (al abrir la app se muestra Inicio).
+1. **Inicio**: tareas vencidas, de hoy, de esta semana, las que ya están dentro de su `avisoDias` y las que no tienen fecha; las listas con «Mostrar en Inicio» que tienen algo apuntado; días libres que quedan del año.
 2. **Tareas** (en la interfaz siempre «tarea», nunca «pendiente»): todas juntas, también las periódicas (renovaciones), con filtro (todas, personal, trabajo, periódicas), fecha opcional, prioridad, repetición, aviso y completadas plegadas.
-3. **Trabajo**: tareas de ámbito trabajo, calendario laboral (lista, mes y año) y una **bolsa única de días libres por año**. Solo datos genéricos: nada confidencial de clientes.
+3. **Listas**: cosas sueltas que no son tareas (compra, AliExpress, regalos, amigo invisible…). Varias listas con nombre, icono y «Mostrar en Inicio» (sale en Inicio, entre Tareas y Días libres, mientras tenga algo sin tachar). Dentro: campo arriba para apuntar seguido con Intro, nota opcional, lo tachado plegado al final y «Quitar tachados». Sin fecha, prioridad ni aviso, y no van en el WhatsApp. `listas` y `elementos` se sincronizan registro a registro como las tareas; borrar una lista borra sus elementos.
+4. **Trabajo**: tareas de ámbito trabajo, calendario laboral (lista, mes y año) y una **bolsa única de días libres por año**. Solo datos genéricos: nada confidencial de clientes.
    - Total del año = `vacacionesTotales` (22 de vacaciones + 2 de libre disposición = 24) + `trabajo.festivos[año]`: el **número** de festivos locales y autonómicos que da la empresa ese año (si no se ha puesto a mano, se calcula con `festivosSevilla(año)`: miércoles de Feria = Pascua + 17, Corpus = Pascua + 60, Jueves Santo, Día de Andalucía si no cae en sábado (domingo → lunes) y el lunes siguiente a cada fiesta nacional en domingo; comprobado con el BOJA 2026 y 2027. Excepción en `FESTIVOS_DEFECTO`: 2026 → 3, por el cambio de Madrid a Sevilla). Para la empresa son una cantidad de días, no fechas: se gastan el día que se quiera y en el calendario no se distinguen.
    - Cada ausencia que descuenta (`vacaciones`, `asuntos_propios`) lleva `año`: el año de días al que cuenta, que puede no ser el de su fecha. `otro` no descuenta. `medio: true` (solo en un único día) cuenta 0,5, como la casilla «Medio día» de la app de la empresa.
    - Los antiguos `festivo_local` / `festivo_autonomico` como fechas se eliminan al cargar (marcados en `deleted`).
    - Días laborables = lunes a viernes sin fiestas nacionales comunes de España (fijas más Viernes Santo calculado) ni los días de empresa (24 y 31 de diciembre).
    - Una ausencia aprobada cuya fecha ya pasó cuenta como disfrutada (sin cambiar el dato).
-4. **Gastos**: hasta la fase 6, resumen de solo lectura de `savey-data` (token de solo lectura; nunca escribe). En la fase 6 pasa a ser Savey entero (ver abajo).
+5. **Gastos**: hasta la fase 6, resumen de solo lectura de `savey-data` (token de solo lectura; nunca escribe). En la fase 6 pasa a ser Savey entero (ver abajo).
 
 ## Avisos por WhatsApp
 La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data` (no en este repo) lee `datos.json` y envía por **WhatsApp con CallMeBot** (`api.callmebot.com/whatsapp.php`; Secrets `CALLMEBOT_PHONE` y `CALLMEBOT_APIKEY`) un único mensaje con las tareas de hoy, las vencidas y las que están dentro de su `avisoDias`, solo si hay algo. El mensaje lleva solo títulos y fechas, nunca notas: es un servicio de terceros y Álvaro ha aceptado que ese texto pase por sus servidores.
