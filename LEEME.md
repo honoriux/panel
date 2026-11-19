@@ -1,6 +1,8 @@
-# Panel
+# Nora
 
-App personal para tener a mano lo que caduca (ITV, DNI, seguros, garantías…), las tareas, el trabajo y un resumen de gastos de SaveyCustom. Es una *web app instalable* (PWA), hermana de SaveyCustom: misma forma de instalarse, mismo aspecto y funciona sin conexión.
+App personal (antes «Panel») para tener a mano las tareas, lo que caduca (ITV, DNI, seguros, garantías…), las listas, el trabajo y los gastos (Savey). Es una *web app instalable* (PWA) y funciona sin conexión. Por dentro sigue llamándose `panel`: la dirección (`honoriux.github.io/panel/`) y los repositorios (`panel`, `panel-data`) no cambian.
+
+**Cambio de nombre en el iPhone:** iOS solo lee el nombre y el icono al añadir la app, así que para ver «Nora» con el dibujo nuevo hay que volver a instalarla. Ojo: al eliminar una app de la pantalla de inicio, iOS borra también sus datos del dispositivo. Antes, abre la app con conexión para que sincronice y apunta tus dos tokens (el de `panel-data` y el de `savey-data`). Después: mantén pulsado el icono → *Eliminar app* → *Eliminar de la pantalla de inicio*, vuelve a añadirla desde Safari (Compartir → *Añadir a pantalla de inicio*) y conecta de nuevo **Configuración → Sincronizar entre dispositivos** y **Configuración → Savey**. Todo vuelve desde GitHub; solo se pierden los ajustes del dispositivo, como el modo oscuro. En Windows basta con cerrar y abrir la app (como mucho, desinstalarla y volver a instalarla desde Edge o Chrome; los datos se mantienen si al desinstalar no marcas borrar los datos).
 
 **Tus datos se guardan solo en tus dispositivos.** Lo que se publica en internet es únicamente la app, sin ningún dato tuyo.
 

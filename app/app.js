@@ -1,11 +1,11 @@
 'use strict';
-/* Panel — tareas (incluidas las periódicas y renovaciones), listas, trabajo y gastos (Savey, en savey.js).
+/* Nora (antes Panel) — tareas (incluidas las periódicas y renovaciones), listas, trabajo y gastos (Savey, en savey.js).
    Hermana de SaveyCustom: misma estructura, mismas piezas (hojas, toast, tema, seguimiento de cambios).
    Los datos viven en el dispositivo (localStorage); la sincronización con GitHub llega en la fase 3. */
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.17';
+const APP_VERSION = 'panel-2026-11-19.18';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -196,7 +196,7 @@ const TIPOS = {
 const UNIDADES = { dias: ['día', 'días'], semanas: ['semana', 'semanas'], meses: ['mes', 'meses'], 'años': ['año', 'años'] };
 const CADA_UNO = { dias: 'Cada día', semanas: 'Cada semana', meses: 'Cada mes', 'años': 'Cada año' };
 const AVISOS = [1, 3, 7, 15, 30, 45, 60, 90];
-const PRIORIDADES = { alta: { n: 'Alta', color: 'var(--accent)' }, media: { n: 'Media', color: 'var(--warn)' }, baja: { n: 'Baja', color: 'var(--muted)' } };
+const PRIORIDADES = { alta: { n: 'Alta', color: 'var(--red)' }, media: { n: 'Media', color: 'var(--warn)' }, baja: { n: 'Baja', color: 'var(--muted)' } };
 const ORDEN_PRIO = { alta: 0, media: 1, baja: 2 };
 const AMBITOS = { personal: 'Personal', trabajo: 'Trabajo' };
 const FILTROS = [['todas', 'Todas'], ['personal', 'Personal'], ['trabajo', 'Trabajo'], ['repite', 'Periódicas']];
@@ -716,7 +716,7 @@ function viewMes() {
   }
   const resumen = [ok && plural(ok, 'día libre', 'días libres'), pend && `${num(pend)} sin aprobar`, plan && plural(plan, 'planificado', 'planificados')].filter(Boolean).join(' · ');
   return `<div class="calnav"><button class="iconbtn" data-act="calPrev" aria-label="Mes anterior">${I.left}</button>
-      <button class="serif" data-act="calHoy" style="font-size:21px">${mesNombre(m)} <span class="red">${y}</span></button>
+      <button class="serif" data-act="calHoy" style="font-size:21px">${mesNombre(m)} <span style="color:var(--accent)">${y}</span></button>
       <button class="iconbtn" data-act="calNext" aria-label="Mes siguiente">${I.right}</button></div>
     ${gridMes(y, m)}
     <div class="small" style="text-align:center;margin:8px 0 4px">${resumen || 'Sin días libres este mes'}</div>
@@ -967,7 +967,7 @@ async function exportBackup() {
 function restoreBackup(text) {
   let data;
   try { data = JSON.parse(text); } catch (e) { return alert('El archivo no es una copia válida.'); }
-  if (data.app !== 'panel' || !Array.isArray(data.tareas)) return alert('El archivo no es una copia de Panel.');
+  if (data.app !== 'panel' || !Array.isArray(data.tareas)) return alert('El archivo no es una copia de Nora.');
   data.caducidades = data.caducidades || [];
   if (!confirm(`La copia tiene ${data.tareas.length + data.caducidades.length} tareas. Se REEMPLAZARÁN los datos actuales. ¿Continuar?`)) return;
   delete data.app; delete data.exportedAt;
@@ -1079,7 +1079,7 @@ function applyTheme() {
   const th = db.settings.theme;
   if (th === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = th;
   const dark = th === 'dark' || (th === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name=theme-color]').content = dark ? '#17181c' : '#f3eeeb';
+  document.querySelector('meta[name=theme-color]').content = dark ? '#15141f' : '#f2f1f7';
 }
 
 /* ---------------- Sincronización con un repositorio privado de GitHub (copiado y adaptado de Savey) ----------------
@@ -1161,7 +1161,7 @@ async function pullRemote(cfg = sync) {
   const { sha, text } = await getFile(SYNC_FILE, cfg);
   if (text === null) return { sha, data: null };
   const data = JSON.parse(text);
-  if (!esDePanel(data)) throw new Error('El datos.json del repositorio no es de Panel. Revisa que el repositorio sea panel-data');
+  if (!esDePanel(data)) throw new Error('El datos.json del repositorio no es de Nora. Revisa que el repositorio sea panel-data');
   return { sha, data };
 }
 
@@ -1303,7 +1303,7 @@ function openSyncSetup() {
       connect: async (t, s) => {
         if (busy) return;
         if (!f.owner || !f.repo || !f.token) return toast('Rellena los tres campos');
-        if (/^savey/i.test(f.repo)) return alert('Ese es el repositorio de Savey. Panel usa su propio repositorio (panel-data) y nunca escribe en el de Savey.');
+        if (/^savey/i.test(f.repo)) return alert('Ese es el repositorio de Savey. Nora usa su propio repositorio (panel-data) y nunca escribe en el de Savey.');
         const cfg = { owner: f.owner, repo: f.repo, token: f.token };
         busy = true; s.refresh();
         try {

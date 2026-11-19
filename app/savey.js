@@ -556,7 +556,7 @@ function bars(rows) {
   const max = Math.max(1, ...rows.map(r => Math.max(r.a, r.b || 0)));
   return rows.map(r => `<div style="display:grid;grid-template-columns:62px 1fr 92px;align-items:center;gap:8px;padding:5px 0;font-size:13px">
     <span class="muted">${r.label}</span><div>
-      <div style="height:9px;border-radius:5px;background:${r.color || 'var(--accent)'};width:${r.a / max * 100}%"></div>
+      <div style="height:9px;border-radius:5px;background:${r.color || 'var(--red)'};width:${r.a / max * 100}%"></div>
       ${r.b !== undefined ? `<div style="height:9px;border-radius:5px;background:var(--income);width:${r.b / max * 100}%;margin-top:3px"></div>` : ''}
     </div><span style="text-align:right">${money(r.a)}</span></div>`).join('');
 }
@@ -998,7 +998,7 @@ async function monthlySnapshot() {
   if (sync.lastSnapshot === key) return;
   const res = await gh(`/contents/${BACKUP_DIR}/${key}.json`, {
     method: 'PUT',
-    body: JSON.stringify({ message: `Copia mensual ${key} (desde Panel en ${deviceName})`, content: b64enc(backupJson()) }),
+    body: JSON.stringify({ message: `Copia mensual ${key} (desde Nora en ${deviceName})`, content: b64enc(backupJson()) }),
   });
   // 422 = ya existe (la hizo otro dispositivo este mes): también vale
   if (res.ok || res.status === 422) sync.lastSnapshot = key;
@@ -1052,7 +1052,7 @@ async function syncNow() {
       if (data && canon(data) === canon(db)) break; // la nube ya está al día
       const res = await gh(`/contents/${SYNC_FILE}`, {
         method: 'PUT',
-        body: JSON.stringify({ message: `Cambios desde Panel (${deviceName})`, content: b64enc(JSON.stringify(syncPayload(db))), ...(sha ? { sha } : {}) }),
+        body: JSON.stringify({ message: `Cambios desde Nora (${deviceName})`, content: b64enc(JSON.stringify(syncPayload(db))), ...(sha ? { sha } : {}) }),
       });
       if (res.ok) break;
       if ((res.status === 409 || res.status === 422) && attempt < 3) continue; // otro dispositivo subió algo a la vez: reintentar
@@ -1098,7 +1098,7 @@ function openSyncSetup() {
       connect: async (t, s) => {
         if (busy) return;
         if (!f.owner || !f.repo || !f.token) return toast('Rellena los tres campos');
-        if (f.repo.toLowerCase() === 'panel-data') return alert('panel-data es el repositorio de Panel. Para los gastos usa el de Savey (savey-data).');
+        if (f.repo.toLowerCase() === 'panel-data') return alert('panel-data es el repositorio de Nora. Para los gastos usa el de Savey (savey-data).');
         const cfg = { owner: f.owner, repo: f.repo, token: f.token };
         busy = true; s.refresh();
         try {

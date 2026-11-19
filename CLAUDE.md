@@ -1,4 +1,6 @@
-# Panel — proyecto
+# Nora (antes Panel) — proyecto
+
+La app se llama **Nora** en todo lo visible (icono, título, manifest, textos y cabecera del WhatsApp). Por dentro sigue siendo «panel»: repo `honoriux/panel`, dirección `honoriux.github.io/panel/`, repo de datos `panel-data`, claves `panel.*` del dispositivo, `APP_VERSION`/`CACHE` `panel-…` y copias `panel-AAAA-MM-DD.json`. No renombrarlos: cambiaría la dirección y en el iPhone se perderían los datos del dispositivo y los tokens.
 
 PWA personal de Álvaro para tener centralizadas las tareas (también las periódicas: renovaciones y lo que caduca), el trabajo (pendientes, vacaciones y festivos) y los gastos (Savey). No es un panel para mirar a diario, salvo los gastos: se consulta cuando hace falta y avisa cuando algo se acerca.
 
@@ -70,7 +72,7 @@ La PWA no puede avisar en segundo plano. Una GitHub Action diaria en `panel-data
 - Responder siempre en español.
 - Primero el plan, luego un cambio cada vez. Explica cada cambio en una frase.
 - Todo en español de España: euros, fechas `dd/mm/aaaa`, semana empezando en lunes.
-- Estilo visual coherente con Savey (mismas variables CSS y modo claro/oscuro/auto).
+- Paleta de Nora (variables en `styles.css`, modo claro/oscuro/auto): índigo `--accent` (color de la app: botones, pestaña activa, interruptores, enlaces), menta `--income` (ingresos, hecho), ámbar `--warn`, coral `--red` (gastos, vencidas, prioridad alta, alertas y banners) y marino `--navy`. Los colores de las categorías y cuentas de Savey son datos del usuario y no se tocan. Icono: anillo de cuatro colores con un bocadillo claro, sin letra (`app/icons/`, a sangre completa: iOS redondea las esquinas).
 - Prueba en el navegador en ancho móvil y escritorio antes de dar algo por bueno. Antes de probar en `localhost`, guarda una copia de su `localStorage` y restáurala al terminar.
 - La app solo envía datos a la API de GitHub. La única excepción es la Action de avisos (fase 5) con CallMeBot.
 - `.gitignore`: nada de datos ni tokens en el repo de la app. La app es pública en Pages y los datos solo viven en los repos privados.
