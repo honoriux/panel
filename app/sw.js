@@ -1,11 +1,12 @@
 // Service worker: permite usar la app sin conexión.
-// Sirve desde caché y actualiza en segundo plano (los cambios se ven al siguiente arranque).
+// Sirve desde caché y actualiza en segundo plano. Cuando cambia CACHE, este service worker nuevo descarga todos los
+// ficheros saltándose la caché HTTP (GitHub Pages la pone de 10 minutos), toma el control y la app se recarga sola (app.js).
 // CACHE tiene que coincidir con APP_VERSION de app.js ('panel-AAAA-MM-DD.N': fecha de publicación y nº de ese día).
-const CACHE = 'panel-2026-11-20.4';
+const CACHE = 'panel-2026-11-20.5';
 const FILES = ['./', 'index.html', 'styles.css', 'savey.js', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

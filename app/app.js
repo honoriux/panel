@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-20.4';
+const APP_VERSION = 'panel-2026-11-20.5';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -843,6 +843,7 @@ function closeSheet(s = sheets[sheets.length - 1]) {
   if (s.onUp) window.removeEventListener('pointerup', s.onUp);
   s.wrap.classList.remove('open');
   setTimeout(() => s.wrap.remove(), 280);
+  if (recargarPendiente) setTimeout(recargarSiSePuede, 300);
 }
 // Cambio en un campo de fecha de una hoja: actualiza solo el texto visible de su fila y deja el resto para después
 // Si el valor queda vacío (botón «Restablecer» del selector), muestra el texto de campo vacío.
@@ -1368,10 +1369,28 @@ document.addEventListener('visibilitychange', () => {
   render(); // al volver a la app, recalcula los días restantes
   syncNow();
   Savey.alVolver(); // apunta los recurrentes que tocan y sincroniza con savey-data
+  buscarVersionNueva();
 });
 window.addEventListener('online', () => { syncNow(); Savey.sincronizar(); });
 syncNow();
 Savey.sincronizar();
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
+/* Actualizaciones. En iPhone la app instalada casi nunca se «cierra» de verdad: al volver solo se reanuda, sin pedir nada a la red.
+   Por eso, al abrirla y cada vez que vuelve al primer plano, se pregunta si hay un sw.js nuevo (sin caché HTTP). Si lo hay,
+   el nuevo service worker descarga la versión entera, toma el control y la app se recarga sola con ella
+   (en cuanto no haya ninguna hoja abierta, para no perder lo que se esté escribiendo). */
+let recargarPendiente = false;
+function recargarSiSePuede() {
+  if (sheets.length || document.hidden) return; // se intenta otra vez al cerrar la hoja o al volver a la app
+  recargarPendiente = false; location.reload();
+}
+function buscarVersionNueva() {
+  if (recargarPendiente) return recargarSiSePuede();
+  navigator.serviceWorker?.getRegistration().then(reg => reg?.update()).catch(() => { });
+}
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  const habiaControl = !!navigator.serviceWorker.controller; // la primera instalación no necesita recargar
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (habiaControl) { recargarPendiente = true; recargarSiSePuede(); } });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => { });
+}
