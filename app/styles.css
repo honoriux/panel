@@ -98,6 +98,13 @@ h2.sec { font-family: var(--serif); font-weight: 400; font-size: 21px; margin: 1
 .bar .ritmo { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); opacity: .5; border-radius: 1px; }
 .bcard .bar:has(.ritmo) { overflow: visible; }
 .brow { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
+/* Tarjeta de gastos en Inicio */
+.gcard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+.gcard .gmain { flex: 1; min-width: 0; }
+.gcard .gtot { font-size: 22px; }
+.gcard .gbar { margin: 6px 0 0; height: 6px; }
+.gbtn { font-size: 13px; font-weight: 600; color: var(--red); background: var(--red-soft); padding: 7px 13px; border-radius: 999px; white-space: nowrap; }
+.gbtn:active { transform: scale(.96); }
 .stats4 { display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; }
 .stats4 > div + div { border-left: 1px solid var(--line); }
 .stats4 b { display: block; font-size: 20px; font-family: var(--serif); font-weight: 400; }

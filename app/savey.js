@@ -1131,6 +1131,9 @@ return {
   view, top,
   actions: mainActions,
   nuevo: () => openTxForm(null),
+  // Para la tarjeta de Inicio: lo gastado e ingresado este mes en todas las cuentas, y abrir Gastos en el mes actual
+  resumenMes: () => { const d = new Date(), s = monthStats(d.getFullYear(), d.getMonth(), 'all'); return { ...s, mes: MONTHS_L[d.getMonth()], gastado: money(s.exp), balance: money(s.bal, { sign: true }) }; },
+  irAlMes: () => { const d = new Date(); ui.y = d.getFullYear(); ui.m = d.getMonth(); ui.tab = 'home'; },
   swipe: dx => { if (ui.tab !== 'accounts') (dx < 0 ? mainActions.nextMonth : mainActions.prevMonth)(); },
   alVolver: () => { if (processRecurring()) render(); syncNow(); },
   alOcultar: () => { if (syncTimer) syncNow(); },

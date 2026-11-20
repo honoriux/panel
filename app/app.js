@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-20.3';
+const APP_VERSION = 'panel-2026-11-20.4';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -282,12 +282,17 @@ function viewHome() {
   const avisos = lista.filter(enAviso).length;
   const pend = `<h2 class="sec">Tareas${avisos ? ` <span class="tag red" style="vertical-align:middle">${plural(avisos, 'con aviso', 'con aviso')}</span>` : ''}</h2>
     ${lista.length ? gruposTareas(lista, true) : `<div class="empty-state" style="padding:24px 10px">Nada vencido, para esta semana ni sin fecha.<br>Pulsa <b>+</b> para añadir algo.</div>`}`;
-  // Los días libres ya no salen aquí (solo en Trabajo). Arriba, apuntar un gasto sin ir a Gastos.
-  const gasto = `<button class="btn pink" style="width:100%;margin:4px 0 6px" data-act="nuevoGasto">+ Añadir gasto</button>`;
+  // Al final, lo gastado este mes con su balance y el botón para apuntar un gasto sin ir a Gastos (los días libres, solo en Trabajo)
+  const g = Savey.resumenMes(), pctG = g.inc ? Math.min(100, g.exp / g.inc * 100) : g.exp ? 100 : 0;
+  const gasto = `<h2 class="sec">Gastos</h2><div class="bcard gcard" data-act="irGastos" role="button">
+      <div class="gmain"><div class="small">Gastado en ${g.mes}</div><div class="serif red gtot">${g.gastado}</div>
+        <div class="bar gbar"><div style="width:${pctG}%;background:var(--red)"></div><div style="flex:1;background:${g.inc ? 'var(--income)' : 'transparent'}"></div></div>
+        <div class="small" style="margin-top:6px">Balance <b class="${g.bal < 0 ? 'red' : 'green'}" style="font-weight:600">${g.balance}</b></div></div>
+      <button class="gbtn" data-act="nuevoGasto">+ Gasto</button></div>`;
   // Listas marcadas para Inicio que tienen algo apuntado
   const enInicio = listasOrden().filter(l => l.inicio && quedan(l.id));
   const listas = enInicio.length ? `<h2 class="sec">Listas</h2>${enInicio.map(l => listaRow(l, true)).join('')}` : '';
-  return `${backupBanner()}${avisosBanner()}${gasto}${pend}${listas}`;
+  return `${backupBanner()}${avisosBanner()}${pend}${listas}${gasto}`;
 }
 
 function openTareaForm(existing, preset = {}) {
@@ -1019,6 +1024,7 @@ const mainActions = {
   backup: () => exportBackup(),
   filtroTareas: t => { ui.filtroTareas = t.dataset.f; render(); },
   nuevoGasto: () => Savey.nuevo(),
+  irGastos: () => { Savey.irAlMes(); ui.tab = 'gastos'; render(); window.scrollTo(0, 0); },
   toggleCompletadas: () => { ui.verCompletadas = !ui.verCompletadas; render(); },
   toggleTarea: t => { const x = tarea(t.dataset.id); if (x) toggleTarea(x); },
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
