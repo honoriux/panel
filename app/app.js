@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-20.6';
+const APP_VERSION = 'panel-2026-11-20.7';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -197,6 +197,13 @@ const TIPOS = {
 };
 const ICONOS_TAREA = ['🚗', '⛽', '🔧', '🪪', '🛡️', '🧾', '💳', '🏦', '💶', '📦', '📺', '📱', '💻', '🏠', '🔑', '🧹', '🛒', '🎁', '🎂', '🎉',
   '💊', '🩺', '🦷', '💇', '🏋️', '⚽', '🐶', '🐱', '🌱', '📚', '🎓', '💼', '📞', '✉️', '✈️', '🏖️', '🎬', '🎵', '🍽️', '👕', '🚲', '📅'];
+// «Icono personalizado» (tareas, listas y, en Savey, cuentas y categorías): cualquier emoji escrito o pegado.
+// El elegido se añade al final de la cuadrícula si no está en el catálogo, para que se vea marcado.
+const primerEmoji = txt => { const g = [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment((txt || '').trim())][0]?.segment; return g && /\p{Extended_Pictographic}/u.test(g) ? g : null; };
+const conPropio = (catalogo, actual) => actual && !catalogo.includes(actual) ? [...catalogo, actual] : catalogo;
+const campoEmoji = accion => `<div class="field"><label>Icono personalizado</label><input data-input="${accion}" placeholder="Escribe o pega cualquier emoji" value="" autocomplete="off"></div>`;
+// Acción para ese campo: llama a poner(emoji) con el primero que se escriba y vacía el campo
+const accionEmoji = poner => (t, s) => { const e = primerEmoji(t.value); if (e) { poner(e); t.value = ''; t.blur(); s.refresh(); } };
 const iconoTarea = t => t.icono || TIPOS[t.tipo]?.icon || '';
 const UNIDADES = { dias: ['día', 'días'], semanas: ['semana', 'semanas'], meses: ['mes', 'meses'], 'años': ['año', 'años'] };
 const CADA_UNO = { dias: 'Cada día', semanas: 'Cada semana', meses: 'Cada mes', 'años': 'Cada año' };
@@ -324,8 +331,8 @@ function openTareaForm(existing, preset = {}) {
         : '<div class="small" style="padding:6px 0">Ponle fecha si quieres que se repita o que te avise con antelación.</div>'}
       <div class="field"><label>Prioridad</label>${seg('prioridad', Object.fromEntries(Object.entries(PRIORIDADES).map(([k, v]) => [k, v.n])))}</div>
       <button class="frow" data-act="verIconos"><span>Icono</span><span class="v ${f.icono ? '' : 'ph'}">${f.icono ? `<span style="font-size:20px">${esc(f.icono)}</span>` : 'Ninguno'} ${verIconos ? '▾' : '›'}</span></button>
-      ${verIconos ? `<div class="iconos" style="margin-top:8px">${[...ICONOS_TAREA, ...(f.icono && !ICONOS_TAREA.includes(f.icono) ? [f.icono] : [])].map(ic => `<button class="${f.icono === ic ? 'on' : ''}" data-act="icono" data-v="${ic}">${ic}</button>`).join('')}</div>
-        <div class="field"><label>U otro emoji</label><input data-input="iconoLibre" placeholder="Escribe o pega un emoji" value=""></div>
+      ${verIconos ? `<div class="iconos" style="margin-top:8px">${conPropio(ICONOS_TAREA, f.icono).map(ic => `<button class="${f.icono === ic ? 'on' : ''}" data-act="icono" data-v="${ic}">${ic}</button>`).join('')}</div>
+        ${campoEmoji('iconoLibre')}
         ${f.icono ? '<button class="link" data-act="sinIcono">Quitar icono</button>' : ''}` : ''}
       <textarea class="note" rows="2" placeholder="Notas..." data-input="notas">${esc(f.notas)}</textarea>
       ${isEdit ? (existing.estado === 'hecha' ? '<button class="btn ghost" style="width:100%" data-act="toggle">Volver a marcar como pendiente</button>'
@@ -346,10 +353,7 @@ function openTareaForm(existing, preset = {}) {
       verIconos: (t, s) => { verIconos = !verIconos; s.refresh(); },
       icono: (t, s) => { f.icono = f.icono === t.dataset.v ? null : t.dataset.v; s.refresh(); },
       sinIcono: (t, s) => { f.icono = null; s.refresh(); },
-      iconoLibre: (t, s) => { // el primer emoji que se escriba (un emoji puede ocupar varios caracteres)
-        const g = [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment(t.value.trim())][0]?.segment;
-        if (g && /\p{Extended_Pictographic}/u.test(g)) { f.icono = g; t.value = ''; t.blur(); s.refresh(); }
-      },
+      iconoLibre: accionEmoji(e => f.icono = e),
       save: (t, s) => {
         if (!f.titulo.trim()) return toast('Escribe la tarea');
         let repite = null;
@@ -435,12 +439,14 @@ function openListaForm(existing) {
     render: () => `${head(isEdit ? 'Editar lista' : 'Nueva lista')}
       <div class="field"><label>Nombre</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="Ej. Compra, AliExpress o Regalos Mamá"></div>
       <div class="field"><label>Icono</label></div>
-      <div class="iconos">${ICONOS_LISTA.map(ic => `<button class="${f.icono === ic ? 'on' : ''}" data-act="icono" data-v="${ic}">${ic}</button>`).join('')}</div>
+      <div class="iconos">${conPropio(ICONOS_LISTA, f.icono).map(ic => `<button class="${f.icono === ic ? 'on' : ''}" data-act="icono" data-v="${ic}">${ic}</button>`).join('')}</div>
+      ${campoEmoji('iconoLibre')}
       <button class="set-row" data-act="inicio"><span class="t">Mostrar en Inicio<div class="small">Sale en Inicio mientras tenga algo apuntado.</div></span><span class="switch ${f.inicio ? 'on' : ''}"></span></button>
       <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">${isEdit ? 'Guardar' : 'Crear lista'}</button></div>`,
     actions: {
       nombre: t => f.nombre = t.value,
       icono: (t, s) => { f.icono = t.dataset.v; s.refresh(); },
+      iconoLibre: accionEmoji(e => f.icono = e),
       inicio: (t, s) => { f.inicio = !f.inicio; s.refresh(); },
       save: (t, s) => {
         if (!f.nombre.trim()) return toast('Ponle un nombre a la lista');

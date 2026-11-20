@@ -604,13 +604,15 @@ function openAccountEdit(a) {
       ${isNew ? '' : '<div class="small" style="padding-top:6px">Si cambias el saldo actual se crea un movimiento de «Ajuste de saldo» por la diferencia (no cuenta como ingreso ni gasto).</div>'}
       <button class="set-row" data-act="personal"><span class="t">Es mi dinero<div class="small">${f.personal ? 'Las transferencias entre tus cuentas no cuentan como ingreso ni gasto.' : 'Lo que transfieras a esta cuenta cuenta como gasto, y lo que llegue de ella, como ingreso. Para préstamos y similares.'}</div></span><span class="switch ${f.personal ? 'on' : ''}"></span></button>
       <div class="field"><label>Color</label><div class="swatches">${COLORS.map(c => `<button class="${c === f.color ? 'on' : ''}" style="background:${c}" data-act="color" data-c="${c}"></button>`).join('')}</div></div>
-      <div class="field"><label>Icono</label><div class="emojis">${EMOJIS.map(e => `<button class="${e === f.icon ? 'on' : ''}" data-act="emoji" data-e="${e}">${e}</button>`).join('')}</div></div>
+      <div class="field"><label>Icono</label><div class="emojis">${conPropio(EMOJIS, f.icon).map(e => `<button class="${e === f.icon ? 'on' : ''}" data-act="emoji" data-e="${e}">${e}</button>`).join('')}</div></div>
+      ${campoEmoji('emojiLibre')}
       <div class="form-foot">${isNew ? '' : '<button class="btn ghost" data-act="del">Eliminar</button>'}<button class="btn navy" data-act="save">Guardar</button></div>`,
     actions: {
       name: t => f.name = t.value, bal: t => f.bal = t.value,
       personal: (t, s) => { f.personal = !f.personal; s.refresh(); },
       color: (t, s) => { f.color = t.dataset.c; s.refresh(); },
       emoji: (t, s) => { f.icon = t.dataset.e; s.refresh(); },
+      emojiLibre: accionEmoji(e => f.icon = e), // de app.js (Panel)
       del: (t, s) => {
         const used = db.transactions.some(x => x.acc === a.id || x.to === a.id);
         if (used) return alert('Esta cuenta tiene movimientos. Para no perder histórico no se puede eliminar.');
@@ -687,13 +689,15 @@ function openCategoryEdit(c, type, onDone) {
       <div style="display:flex;justify-content:center;padding:10px">${ico(f, 'lg')}</div>
       <div class="field"><label>Nombre</label><input data-input="name" value="${esc(f.name)}"></div>
       <div class="field"><label>Color</label><div class="swatches">${COLORS.map(x => `<button class="${x === f.color ? 'on' : ''}" style="background:${x}" data-act="color" data-c="${x}"></button>`).join('')}</div></div>
-      <div class="field"><label>Icono</label><div class="emojis">${EMOJIS.map(e => `<button class="${e === f.icon ? 'on' : ''}" data-act="emoji" data-e="${e}">${e}</button>`).join('')}</div></div>
+      <div class="field"><label>Icono</label><div class="emojis">${conPropio(EMOJIS, f.icon).map(e => `<button class="${e === f.icon ? 'on' : ''}" data-act="emoji" data-e="${e}">${e}</button>`).join('')}</div></div>
+      ${campoEmoji('emojiLibre')}
       ${isNew ? '' : `<button class="set-row" data-act="hide"><span class="t">Ocultar al añadir transacciones</span><span class="switch ${f.hidden ? 'on' : ''}"></span></button>`}
       <div class="form-foot">${isNew ? '' : '<button class="btn ghost" data-act="del">Eliminar</button>'}<button class="btn navy" data-act="save">Guardar</button></div>`,
     actions: {
       name: t => f.name = t.value,
       color: (t, s) => { f.color = t.dataset.c; s.refresh(); },
       emoji: (t, s) => { f.icon = t.dataset.e; s.refresh(); },
+      emojiLibre: accionEmoji(e => f.icon = e), // de app.js (Panel)
       hide: (t, s) => { f.hidden = !f.hidden; s.refresh(); },
       del: (t, s) => {
         const n = db.transactions.filter(x => x.cat === c.id).length;

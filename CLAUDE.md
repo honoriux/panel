@@ -79,6 +79,7 @@ Paso más del workflow de avisos de `panel-data` (cada hora, `if: always()`), y 
 - Responder siempre en español.
 - Primero el plan, luego un cambio cada vez. Explica cada cambio en una frase.
 - Todo en español de España: euros, fechas `dd/mm/aaaa`, semana empezando en lunes.
+- Iconos: todos los selectores de emoji (tareas, listas, cuentas y categorías de Savey) tienen su catálogo y el campo «Icono personalizado» (`campoEmoji` + `accionEmoji` en `app.js`, también usados desde `savey.js`): se queda con el primer emoji escrito o pegado y lo añade al final de la cuadrícula si no está en el catálogo.
 - Paleta de Nora (variables en `styles.css`, modo claro/oscuro/auto): índigo `--accent` (color de la app: botones, pestaña activa, interruptores, enlaces), menta `--income` (ingresos, hecho), ámbar `--warn`, coral `--red` (gastos, vencidas, prioridad alta, alertas y banners) y marino `--navy`. Los colores de las categorías y cuentas de Savey son datos del usuario y no se tocan. Icono: anillo de cuatro colores con un bocadillo claro, sin letra (`app/icons/`, a sangre completa: iOS redondea las esquinas).
 - Prueba en el navegador en ancho móvil y escritorio antes de dar algo por bueno. Antes de probar en `localhost`, guarda una copia de su `localStorage` y restáurala al terminar.
 - La app solo envía datos a la API de GitHub. Las únicas excepciones son las Actions de `panel-data`: los avisos con CallMeBot y la sincronización con el Google Calendar de Álvaro (solo títulos y fechas).
