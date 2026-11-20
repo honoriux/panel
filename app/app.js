@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-19.21';
+const APP_VERSION = 'panel-2026-11-20.1';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -910,8 +910,8 @@ function openSettings() {
    Los envía cada día, a la hora elegida (avisos.hora), una GitHub Action en panel-data (scripts/avisos.mjs) con CallMeBot.
    Aquí solo se elige cuándo salen las tareas con aviso y las vencidas; las de hoy salen siempre. */
 const MODOS_AVISO = {
-  diario: { n: 'Todos los días', d: 'Las vencidas y las que están dentro de su aviso salen en el mensaje de cada día.' },
-  hitos: { n: 'Hitos', d: 'Las que se acercan salen el día que entran en su aviso, a 7 días y a 1 día. Las vencidas, el día siguiente a vencer y luego cada lunes.' },
+  diario: { n: 'Todos los días', d: 'Las vencidas, las que están dentro de su aviso y las de esta semana («Solo la semana que toca») salen en el mensaje de cada día.' },
+  hitos: { n: 'Hitos', d: 'Las que se acercan salen el día que entran en su aviso (las de «Solo la semana que toca», el lunes de esa semana), a 7 días y a 1 día. Las vencidas, el día siguiente a vencer y luego cada lunes.' },
   personalizado: { n: 'Personalizado', d: 'Tú eliges en qué días antes avisar y cada cuánto recordar las vencidas.' },
 };
 const VENCIDAS_AVISO = { diario: 'Cada día', lunes: 'El día siguiente y cada lunes', primer_dia: 'Solo el día siguiente' };
