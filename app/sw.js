@@ -2,7 +2,7 @@
 // Sirve desde caché y actualiza en segundo plano. Cuando cambia CACHE, este service worker nuevo descarga todos los
 // ficheros saltándose la caché HTTP (GitHub Pages la pone de 10 minutos), toma el control y la app se recarga sola (app.js).
 // CACHE tiene que coincidir con APP_VERSION de app.js ('panel-AAAA-MM-DD.N': fecha de publicación y nº de ese día).
-const CACHE = 'panel-2026-11-20.5';
+const CACHE = 'panel-2026-11-20.6';
 const FILES = ['./', 'index.html', 'styles.css', 'savey.js', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

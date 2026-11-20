@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-20.5';
+const APP_VERSION = 'panel-2026-11-20.6';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -183,7 +183,8 @@ function render() {
    Una caducidad es una tarea con fecha, aviso y repetición. Todo vive en db.tareas:
    - repite: null o { cada: N, unidad: 'dias' | 'semanas' | 'meses' | 'años' } (necesita fecha)
    - avisoDias: días de antelación con que aparece en Inicio (null = solo cuando llega su semana)
-   - tipo: icono opcional (vehículo, documento, seguro…) */
+   - icono: emoji opcional, elegido del catálogo ICONOS_TAREA o escrito a mano
+   - tipo: antiguo icono por categoría (vehículo, documento…); se sigue mostrando si no hay icono. 'cumple' = viene de Google Calendar */
 const TIPOS = {
   vehiculo: { n: 'Vehículo', icon: '🚗', color: '#43b5c9' },
   documento: { n: 'Documento', icon: '🪪', color: '#8e6ce0' },
@@ -194,6 +195,9 @@ const TIPOS = {
   cumple: { n: 'Cumpleaños', icon: '🎂', color: '#e6619a' }, // los que vienen de Google Calendar llevan este tipo
   otro: { n: 'Otro', icon: '📄', color: '#7a7f8c' },
 };
+const ICONOS_TAREA = ['🚗', '⛽', '🔧', '🪪', '🛡️', '🧾', '💳', '🏦', '💶', '📦', '📺', '📱', '💻', '🏠', '🔑', '🧹', '🛒', '🎁', '🎂', '🎉',
+  '💊', '🩺', '🦷', '💇', '🏋️', '⚽', '🐶', '🐱', '🌱', '📚', '🎓', '💼', '📞', '✉️', '✈️', '🏖️', '🎬', '🎵', '🍽️', '👕', '🚲', '📅'];
+const iconoTarea = t => t.icono || TIPOS[t.tipo]?.icon || '';
 const UNIDADES = { dias: ['día', 'días'], semanas: ['semana', 'semanas'], meses: ['mes', 'meses'], 'años': ['año', 'años'] };
 const CADA_UNO = { dias: 'Cada día', semanas: 'Cada semana', meses: 'Cada mes', 'años': 'Cada año' };
 const AVISOS = [1, 3, 7, 15, 30, 45, 60, 90];
@@ -252,7 +256,7 @@ function tareaRow(t, conAmbito = false) {
   const fechaTxt = t.fecha ? (conAviso ? fmtDia(t.fecha) : `<span class="${!hecha && n < 0 ? 'red' : ''}">${fmtDia(t.fecha)} · ${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>`) : '';
   const sub = [fechaTxt, t.repite ? '🔁 ' + textoRepite(t.repite) : '', conAmbito ? AMBITOS[t.ambito] : '', t.notas ? esc(t.notas) : ''].filter(Boolean).join(' · ');
   const tag = conAviso ? `<span class="tag ${enAviso(t) ? 'red' : ''}">${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>` : '';
-  const ic = TIPOS[t.tipo] ? `<span class="tico">${TIPOS[t.tipo].icon}</span>` : '';
+  const ic = iconoTarea(t) ? `<span class="tico">${esc(iconoTarea(t))}</span>` : '';
   return `<div class="row ${hecha ? 'done' : ''}"><button class="check ${hecha ? 'on' : ''}" data-act="toggleTarea" data-id="${t.id}" aria-label="${hecha ? 'Marcar como pendiente' : 'Marcar como hecha'}"></button>
     <button class="rowmain" data-act="editTarea" data-id="${t.id}"><div class="main"><div class="name"><span class="dot" style="background:${PRIORIDADES[t.prioridad]?.color}"></span>${ic}${esc(t.titulo)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${tag}</button></div>`;
 }
@@ -268,9 +272,10 @@ function viewTareas() {
   const pend = pendientes(filtro);
   const hechas = db.tareas.filter(t => t.estado === 'hecha' && cumpleFiltro(t, filtro)).sort((a, b) => (b.u || 0) - (a.u || 0));
   const vacio = filtro === 'repite' ? 'No tienes tareas periódicas.<br>ITV, DNI, seguros, garantías, recibos… ponles fecha y repetición.' : `No tienes tareas pendientes${filtro !== 'todas' ? ' de ' + AMBITOS[filtro].toLowerCase() : ''}.`;
-  // En Periódicas, los cumpleaños aparte, al final y por fecha
-  const cumples = filtro === 'repite' ? pend.filter(esCumple) : [], resto = filtro === 'repite' ? pend.filter(t => !esCumple(t)) : pend;
-  const secCumples = cumples.length ? `<div class="grp">🎂 Cumpleaños</div>${cumples.map(t => tareaRow(t)).join('')}` : '';
+  // En Periódicas, los cumpleaños lejanos van plegados al final (por fecha); los que ya están dentro de su aviso salen con las demás
+  const lejos = t => esCumple(t) && !enAviso(t);
+  const cumples = filtro === 'repite' ? pend.filter(lejos) : [], resto = filtro === 'repite' ? pend.filter(t => !lejos(t)) : pend;
+  const secCumples = cumples.length ? `<button class="fold" data-act="toggleCumples">${ui.verCumples ? '▾' : '▸'} 🎂 Cumpleaños (${cumples.length})</button>${ui.verCumples ? cumples.map(t => tareaRow(t)).join('') : ''}` : '';
   return `${seg}${pend.length ? gruposTareas(resto, filtro === 'todas' || filtro === 'repite', true) + secCumples : `<div class="empty-state">${vacio}<br>Pulsa <b>+</b> para añadir.</div>`}
     ${hechas.length ? `<button class="fold" data-act="toggleCompletadas">${ui.verCompletadas ? '▾' : '▸'} Completadas (${hechas.length})</button>${ui.verCompletadas ? hechas.map(t => tareaRow(t, filtro === 'todas')).join('') : ''}` : ''}`;
 }
@@ -299,13 +304,15 @@ function openTareaForm(existing, preset = {}) {
   const isEdit = !!existing;
   const f = existing ? { ...existing, repite: existing.repite ? { ...existing.repite } : null }
     : { titulo: '', ambito: 'personal', fecha: null, prioridad: 'media', notas: '', repite: null, avisoDias: null, tipo: null, ...preset };
+  f.icono = iconoTarea(f) || null; // las antiguas con «tipo» pasan a llevar su emoji
+  let verIconos = false;
   let cadaTxt = String(f.repite?.cada || 1);
   const seg = (key, opts) => `<div class="seg lg" style="margin:4px 0">${Object.entries(opts).map(([k, l]) => `<button class="${f[key] === k ? 'on' : ''}" data-act="set" data-k="${key}" data-v="${k}">${l}</button>`).join('')}</div>`;
   const opt = (v, l, cur) => `<option value="${v}" ${String(cur ?? '') === String(v) ? 'selected' : ''}>${l}</option>`;
   openSheet({
     cls: 'full',
     render: () => {
-      const t = TIPOS[f.tipo], avisos = f.avisoDias == null || AVISOS.includes(f.avisoDias) ? AVISOS : [...AVISOS, f.avisoDias].sort((a, b) => a - b);
+      const avisos = f.avisoDias == null || AVISOS.includes(f.avisoDias) ? AVISOS : [...AVISOS, f.avisoDias].sort((a, b) => a - b);
       return `${head(isEdit ? 'Editar tarea' : 'Crear tarea')}
       <div class="field"><label>Tarea</label><input data-input="titulo" value="${esc(f.titulo)}" placeholder="Ej. Llamar al banco o renovar la ITV"></div>
       <div class="field"><label>Ámbito</label>${seg('ambito', AMBITOS)}</div>
@@ -316,7 +323,10 @@ function openTareaForm(existing, preset = {}) {
         <div class="frow"><span>Avisar</span><span class="v">${f.avisoDias == null ? 'Solo la semana que toca' : f.avisoDias + ' días antes'} ›</span><select class="overlay" data-on="aviso">${opt('', 'Solo la semana que toca', f.avisoDias)}${avisos.map(n => opt(n, n + ' días antes', f.avisoDias)).join('')}</select></div>`
         : '<div class="small" style="padding:6px 0">Ponle fecha si quieres que se repita o que te avise con antelación.</div>'}
       <div class="field"><label>Prioridad</label>${seg('prioridad', Object.fromEntries(Object.entries(PRIORIDADES).map(([k, v]) => [k, v.n])))}</div>
-      <div class="frow"><span>Icono</span><span class="v ${t ? '' : 'ph'}">${t ? `${t.icon} ${t.n}` : 'Ninguno'} ›</span><select class="overlay" data-on="tipo">${opt('', 'Ninguno', f.tipo)}${Object.entries(TIPOS).map(([k, v]) => opt(k, v.icon + ' ' + v.n, f.tipo)).join('')}</select></div>
+      <button class="frow" data-act="verIconos"><span>Icono</span><span class="v ${f.icono ? '' : 'ph'}">${f.icono ? `<span style="font-size:20px">${esc(f.icono)}</span>` : 'Ninguno'} ${verIconos ? '▾' : '›'}</span></button>
+      ${verIconos ? `<div class="iconos" style="margin-top:8px">${[...ICONOS_TAREA, ...(f.icono && !ICONOS_TAREA.includes(f.icono) ? [f.icono] : [])].map(ic => `<button class="${f.icono === ic ? 'on' : ''}" data-act="icono" data-v="${ic}">${ic}</button>`).join('')}</div>
+        <div class="field"><label>U otro emoji</label><input data-input="iconoLibre" placeholder="Escribe o pega un emoji" value=""></div>
+        ${f.icono ? '<button class="link" data-act="sinIcono">Quitar icono</button>' : ''}` : ''}
       <textarea class="note" rows="2" placeholder="Notas..." data-input="notas">${esc(f.notas)}</textarea>
       ${isEdit ? (existing.estado === 'hecha' ? '<button class="btn ghost" style="width:100%" data-act="toggle">Volver a marcar como pendiente</button>'
         : `<button class="btn green" style="width:100%" data-act="toggle">✓ Marcar como hecha</button>${existing.repite ? '<div class="small" style="text-align:center;margin-top:6px">Se creará la siguiente con la nueva fecha.</div>' : ''}`) : ''}
@@ -333,7 +343,13 @@ function openTareaForm(existing, preset = {}) {
       sinFecha: (t, s) => { f.fecha = null; f.repite = null; f.avisoDias = null; s.refresh(); },
       unidad: (t, s) => { f.repite = t.value ? { cada: parseInt(cadaTxt, 10) || 1, unidad: t.value } : null; s.refresh(); },
       aviso: (t, s) => { f.avisoDias = t.value === '' ? null : +t.value; s.refresh(); },
-      tipo: (t, s) => { f.tipo = t.value || null; s.refresh(); },
+      verIconos: (t, s) => { verIconos = !verIconos; s.refresh(); },
+      icono: (t, s) => { f.icono = f.icono === t.dataset.v ? null : t.dataset.v; s.refresh(); },
+      sinIcono: (t, s) => { f.icono = null; s.refresh(); },
+      iconoLibre: (t, s) => { // el primer emoji que se escriba (un emoji puede ocupar varios caracteres)
+        const g = [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment(t.value.trim())][0]?.segment;
+        if (g && /\p{Extended_Pictographic}/u.test(g)) { f.icono = g; t.value = ''; t.blur(); s.refresh(); }
+      },
       save: (t, s) => {
         if (!f.titulo.trim()) return toast('Escribe la tarea');
         let repite = null;
@@ -342,7 +358,8 @@ function openTareaForm(existing, preset = {}) {
           if (!(cada >= 1 && cada <= 99)) return toast('Indica cada cuántos ' + UNIDADES[f.repite.unidad][1]);
           repite = { cada, unidad: f.repite.unidad };
         }
-        const d = { titulo: f.titulo.trim(), ambito: f.ambito, fecha: f.fecha || null, prioridad: f.prioridad, notas: f.notas.trim(), repite, avisoDias: f.fecha ? f.avisoDias : null, tipo: f.tipo || null };
+        const d = { titulo: f.titulo.trim(), ambito: f.ambito, fecha: f.fecha || null, prioridad: f.prioridad, notas: f.notas.trim(), repite, avisoDias: f.fecha ? f.avisoDias : null,
+          icono: f.icono || null, tipo: f.tipo === 'cumple' ? 'cumple' : null }; // el «tipo» antiguo queda en su icono
         if (isEdit) Object.assign(existing, d);
         else db.tareas.push({ id: uid(), ...d, estado: 'pendiente', creada: hoy() });
         save(); s.close(); render(); toast(isEdit ? 'Tarea guardada' : 'Tarea creada');
@@ -1027,6 +1044,7 @@ const mainActions = {
   nuevoGasto: () => Savey.nuevo(),
   irGastos: () => { Savey.irAlMes(); ui.tab = 'gastos'; render(); window.scrollTo(0, 0); },
   toggleCompletadas: () => { ui.verCompletadas = !ui.verCompletadas; render(); },
+  toggleCumples: () => { ui.verCumples = !ui.verCumples; render(); },
   toggleTarea: t => { const x = tarea(t.dataset.id); if (x) toggleTarea(x); },
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
   editAus: t => { const a = aus(t.dataset.id); if (a) openAusForm(a); },
