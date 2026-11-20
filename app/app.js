@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-20.2';
+const APP_VERSION = 'panel-2026-11-20.3';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -789,6 +789,16 @@ function openSheet({ render, actions = {}, cls = '', onRender }) {
     if (d && tipoPuntero === 'mouse' && d.showPicker) try { d.showPicker(); } catch (e) { }
   });
   s.el.addEventListener('change', handle);
+  /* Al elegir un día, el calendario se cierra solo (quitando el foco al campo), sin tener que pulsar el ✓ ni fuera.
+     Se ignora lo que llega justo al abrirlo: en iPhone Safari pone ya la fecha de hoy en un campo vacío. */
+  let focoFecha = 0;
+  s.el.addEventListener('focusin', ev => { if (ev.target.matches?.('input[type=date]')) focoFecha = Date.now(); });
+  const cerrarFecha = ev => {
+    const d = ev.target.closest?.('input[type=date]');
+    if (d && d.value && Date.now() - focoFecha > 500) setTimeout(() => { if (document.activeElement === d) d.blur(); }, 0);
+  };
+  s.el.addEventListener('change', cerrarFecha);
+  s.el.addEventListener('input', cerrarFecha);
   s.el.addEventListener('input', ev => {
     const t = ev.target.closest('[data-input]'); if (t) return s.actions[t.dataset.input]?.(t, s, ev);
     // Algunos selectores de fecha (como «Restablecer» en iPhone) solo avisan con "input": se trata igual que "change"
