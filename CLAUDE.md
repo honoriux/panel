@@ -1,6 +1,6 @@
 # Nora (antes Panel) — proyecto
 
-La app se llama **Nora** en todo lo visible (icono, título, manifest, textos y cabecera del WhatsApp). Por dentro sigue siendo «panel»: repo `honoriux/panel`, dirección `honoriux.github.io/panel/`, repo de datos `panel-data`, claves `panel.*` del dispositivo, `APP_VERSION`/`CACHE` `panel-…` y copias `panel-AAAA-MM-DD.json`. No renombrarlos: cambiaría la dirección y en el iPhone se perderían los datos del dispositivo y los tokens.
+La app se llama **Nora** en todo lo visible (icono, título, manifest y textos; el WhatsApp va sin cabecera, solo las secciones). Por dentro sigue siendo «panel»: repo `honoriux/panel`, dirección `honoriux.github.io/panel/`, repo de datos `panel-data`, claves `panel.*` del dispositivo, `APP_VERSION`/`CACHE` `panel-…` y copias `panel-AAAA-MM-DD.json`. No renombrarlos: cambiaría la dirección y en el iPhone se perderían los datos del dispositivo y los tokens.
 
 PWA personal de Álvaro para tener centralizadas las tareas (también las periódicas: renovaciones y lo que caduca), el trabajo (pendientes, vacaciones y festivos) y los gastos (Savey). No es un panel para mirar a diario, salvo los gastos: se consulta cuando hace falta y avisa cuando algo se acerca.
 
