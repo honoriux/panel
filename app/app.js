@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-20.1';
+const APP_VERSION = 'panel-2026-11-20.2';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -282,14 +282,12 @@ function viewHome() {
   const avisos = lista.filter(enAviso).length;
   const pend = `<h2 class="sec">Tareas${avisos ? ` <span class="tag red" style="vertical-align:middle">${plural(avisos, 'con aviso', 'con aviso')}</span>` : ''}</h2>
     ${lista.length ? gruposTareas(lista, true) : `<div class="empty-state" style="padding:24px 10px">Nada vencido, para esta semana ni sin fecha.<br>Pulsa <b>+</b> para añadir algo.</div>`}`;
-  // Días libres del año en curso, y también los del año anterior si aún quedan por gastar
-  const y = new Date().getFullYear(), conDatos = a => db.trabajo.ausencias.some(x => añoDe(x) === a || x.desde.startsWith(String(a)));
-  const dias = [y - 1, y].filter(a => a === y ? (conDatos(a) || db.trabajo.vacacionesTotales) : conDatos(a) && contadorDias(a).restantes > 0);
-  const libres = dias.length ? `<h2 class="sec">Días libres</h2>${dias.map(a => tarjetaDias(a, true)).join('')}` : '';
+  // Los días libres ya no salen aquí (solo en Trabajo). Arriba, apuntar un gasto sin ir a Gastos.
+  const gasto = `<button class="btn pink" style="width:100%;margin:4px 0 6px" data-act="nuevoGasto">+ Añadir gasto</button>`;
   // Listas marcadas para Inicio que tienen algo apuntado
   const enInicio = listasOrden().filter(l => l.inicio && quedan(l.id));
   const listas = enInicio.length ? `<h2 class="sec">Listas</h2>${enInicio.map(l => listaRow(l, true)).join('')}` : '';
-  return `${backupBanner()}${avisosBanner()}${pend}${listas}${libres}`;
+  return `${backupBanner()}${avisosBanner()}${gasto}${pend}${listas}`;
 }
 
 function openTareaForm(existing, preset = {}) {
@@ -1010,6 +1008,7 @@ const mainActions = {
   settings: () => openSettings(),
   backup: () => exportBackup(),
   filtroTareas: t => { ui.filtroTareas = t.dataset.f; render(); },
+  nuevoGasto: () => Savey.nuevo(),
   toggleCompletadas: () => { ui.verCompletadas = !ui.verCompletadas; render(); },
   toggleTarea: t => { const x = tarea(t.dataset.id); if (x) toggleTarea(x); },
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
