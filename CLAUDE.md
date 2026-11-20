@@ -8,6 +8,7 @@ Hermana de **SaveyCustom** (`honoriux/savey`, en `D:\Documentos\Scripts\Savey io
 
 ## Arquitectura (no cambiar sin preguntar)
 - HTML + CSS + JS vanilla, sin frameworks ni build. La app está en `app/` (`index.html`, `styles.css`, `app.js`, `savey.js`, `sw.js`, `manifest.webmanifest`, `icons/`). `savey.js` se carga antes que `app.js`.
+- Actualizaciones: al abrir la app y cada vez que vuelve al primer plano, `buscarVersionNueva()` pide `reg.update()` (registro con `updateViaCache: 'none'`); el service worker nuevo precarga todo con `cache: 'reload'`, toma el control y la app se recarga sola en `controllerchange` (si no hay hojas abiertas; si las hay, al cerrarlas). La primera instalación no recarga.
 - Repo público `honoriux/panel`. Una GitHub Action (`.github/workflows/pages.yml`) publica solo `app/` en GitHub Pages (`honoriux.github.io/panel/`) en cada push a `main`. Se instala como PWA en iPhone y Windows.
 - Git está instalado y autenticado en este equipo: los cambios se publican con commit + push (autor `honoriux <honoriux@users.noreply.github.com>`, configurado solo en este repo).
 - Datos en `localStorage` y sincronizados con un **repo privado** de GitHub (`panel-data`, fichero `datos.json`) mediante la API de contents y un token fine-grained que se guarda solo en el dispositivo (clave aparte, nunca en copias).
