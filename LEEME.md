@@ -86,7 +86,7 @@ Cada hora (en la misma ejecución que los avisos), `panel-data` sincroniza con t
 - **Nora → Google:** los días libres (vacaciones, libre disposición y otros, con su estado: «(pedido)», «(por pedir)») y las tareas pendientes con fecha aparecen en un calendario propio llamado **Nora**, como eventos de día completo. Lo pasado no sale. Solo títulos y fechas, nunca notas. Ese calendario lo lleva Nora: lo que cambies o crees allí a mano se sobrescribe o se borra.
 - **Google → Nora:** los eventos que se repiten **cada año** de un calendario aparte «Cumpleaños» pasan a Nora como tareas periódicas 🎂 con aviso 7 días antes (salen en Inicio y en el WhatsApp). Si cambias el nombre o el día en Google, se actualiza; si lo quitas de Google, se quita de Nora; si lo borras en Nora, no vuelve. Cámbialos en Google, no en Nora.
 
-En el calendario «Nora» salen también las fiestas nacionales y el 24 y 31 de diciembre (de hoy a final del año que viene), y los festivos que añadas en Trabajo («+ Añadir festivo»).
+En el calendario «Nora» salen también las fiestas nacionales y el 24 y 31 de diciembre (de hoy a final del año que viene), y los festivos que añadas en Trabajo (al pedir días, tipo «Festivo»).
 
 Los cambios tardan como mucho una hora en llegar. Si tienes prisa: **Configuración → Sincronizar ahora** (si el token tiene el permiso *Actions*) o **Actions → Google Calendar → Run workflow**.
 

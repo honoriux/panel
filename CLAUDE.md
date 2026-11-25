@@ -51,7 +51,7 @@ Orden de las pestañas, de izquierda a derecha: Tareas, Listas, Inicio, Gastos, 
    - Los antiguos `festivo_local` / `festivo_autonomico` como fechas se eliminan al cargar (marcados en `deleted`).
    - Días laborables = lunes a viernes sin fiestas nacionales comunes de España (fijas más Viernes Santo calculado) ni los días de empresa (24 y 31 de diciembre).
    - Una ausencia aprobada cuya fecha ya pasó cuenta como disfrutada (sin cambiar el dato).
-   - Tipo `festivo` («Festivo», botón «+ Añadir festivo» en Trabajo): un día no laborable que no sale solo, como las fiestas nacionales o el 24 y 31 de diciembre. No descuenta de nada y no tiene «Cuenta para» (su `año` es el de la fecha), estado (siempre `aprobado`) ni medio día. Sale con los no laborables (editable), se pinta en rojo (`nac`) y sus fechas no cuentan como laborables en las demás peticiones. Va también al calendario «Nora».
+   - Tipo `festivo` («Festivo», al pedir días): un día no laborable que no sale solo, como las fiestas nacionales o el 24 y 31 de diciembre. No descuenta de nada y no tiene «Cuenta para» (su `año` es el de la fecha), estado (siempre `aprobado`) ni medio día. Sale con los no laborables (editable), se pinta en rojo (`nac`) y sus fechas no cuentan como laborables en las demás peticiones. Va también al calendario «Nora».
 5. **Gastos**: Savey entero (ver «Savey dentro de Panel»).
 
 ## Avisos por WhatsApp

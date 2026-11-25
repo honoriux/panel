@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.3';
+const APP_VERSION = 'panel-2026-11-25.4';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -635,11 +635,10 @@ function viewTrabajo() {
     <div class="small" style="margin:-4px 0 6px">Los que cuentan para ${y}, aunque caigan en otro año</div>
     ${ausencias.map(ausRow).join('')}
     <button class="addcard" data-act="newAus" style="margin-top:10px">+ Pedir días</button>
-    <button class="fold" data-act="toggleNoLab">${ui.verNoLab ? '▾' : '▸'} No laborables de ${y} (${noLab.length}): no se piden</button>
+    <button class="fold" data-act="toggleNoLab">${ui.verNoLab ? '▾' : '▸'} No laborables de ${y} (${noLab.length})</button>
     ${ui.verNoLab ? noLab.map(({ x, a }) => a
-      ? `<button class="row" data-act="editAus" data-id="${a.id}"><span class="ico" style="background:var(--line)">🎉</span><div class="main"><div class="name">${esc(a.nombre || 'Festivo')}</div><div class="sub">${rangoTxt(a)} · Festivo añadido</div></div><span class="chev">›</span></button>`
-      : `<div class="row done"><span class="ico" style="background:var(--line)">${x[2] === 'empresa' ? '🏢' : '📅'}</span><div class="main"><div class="name">${x[1]}</div><div class="sub">${DAYS[parseDia(x[0]).getDay()]}, ${fmtDia(x[0])} · ${x[2] === 'empresa' ? 'Lo da la empresa' : 'Fiesta nacional'}</div></div></div>`).join('') : ''}
-    <button class="addcard" data-act="newFestivo" style="margin-top:8px">+ Añadir festivo</button>`;
+      ? `<button class="row done" data-act="editAus" data-id="${a.id}"><span class="ico" style="background:var(--line)">🎉</span><div class="main"><div class="name">${esc(a.nombre || 'Festivo')}</div><div class="sub">${rangoTxt(a)} · Festivo añadido</div></div><span class="chev">›</span></button>`
+      : `<div class="row done"><span class="ico" style="background:var(--line)">${x[2] === 'empresa' ? '🏢' : '📅'}</span><div class="main"><div class="name">${x[1]}</div><div class="sub">${DAYS[parseDia(x[0]).getDay()]}, ${fmtDia(x[0])} · ${x[2] === 'empresa' ? 'Lo da la empresa' : 'Fiesta nacional'}</div></div></div>`).join('') : ''}`;
 }
 
 function openAusForm(existing, preset = {}) {
@@ -1089,7 +1088,6 @@ const mainActions = {
   irGastos: () => { Savey.irAlMes(); ui.tab = 'gastos'; render(); window.scrollTo(0, 0); },
   toggleCompletadas: () => { ui.verCompletadas = !ui.verCompletadas; render(); },
   añadirItem: () => { const i = $('#addItem'); if (i) añadirElemento(i, document.activeElement === i); },
-  newFestivo: () => openAusForm(null, { tipo: 'festivo' }),
   toggleCumples: () => { ui.verCumples = !ui.verCumples; render(); },
   toggleTarea: t => { const x = tarea(t.dataset.id); if (x) toggleTarea(x); },
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
