@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.2';
+const APP_VERSION = 'panel-2026-11-25.3';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -521,6 +521,8 @@ const esFestivo = a => a.tipo === 'festivo';
 // Fechas de los festivos fijados por la empresa (para no contarlas como laborables en otras peticiones)
 const fechasFestivos = () => { const s = new Set(); for (const a of db.trabajo.ausencias) if (esFestivo(a)) for (let d = parseDia(a.desde); dayKey(d) <= a.hasta; d.setDate(d.getDate() + 1)) s.add(dayKey(d)); return s; };
 const ESTADOS = { por_pedir: 'Por pedir', pedido: 'Pedido', aprobado: 'Aprobado', disfrutado: 'Disfrutado' };
+// Lo que se elige: «Disfrutado» no, porque un aprobado ya pasado se muestra solo como disfrutado (estadoReal)
+const ESTADOS_ELEGIR = { por_pedir: 'Por pedir', pedido: 'Pedido', aprobado: 'Aprobado' };
 const descuenta = a => a.tipo === 'vacaciones' || a.tipo === 'asuntos_propios';
 const añoDe = a => (!esFestivo(a) && a['año']) || +a.desde.slice(0, 4); // un festivo es del año en que cae
 const aus = id => db.trabajo.ausencias.find(a => a.id === id);
@@ -596,7 +598,7 @@ const num = n => String(n).replace('.', ',');
 const plural = (n, s, p) => `${num(n)} ${n === 1 ? s : p}`;
 const diasTxt = n => n === .5 ? 'medio día' : plural(n, 'día', 'días');
 // Selector de estado dentro de una fila de la vista principal (cambia sin abrir el formulario)
-const estadoChip = a => { const e = estadoReal(a); return `<label class="tag chip st-${e}">${ESTADOS[e]} ▾<select data-change="estadoAus" data-id="${a.id}">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === e ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`; };
+const estadoChip = a => { const e = estadoReal(a); return `<label class="tag chip st-${e}">${ESTADOS[e]} ▾<select data-change="estadoAus" data-id="${a.id}">${Object.entries(ESTADOS_ELEGIR).map(([k, l]) => `<option value="${k}" ${k === (e === 'disfrutado' ? 'aprobado' : e) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`; };
 function ausRow(a) {
   const t = TIPOS_AUS[a.tipo] || TIPOS_AUS.otro;
   const sub = [rangoTxt(a), descuenta(a) ? diasTxt(diasDe(a)) : 'no descuenta', añoDe(a) !== +a.desde.slice(0, 4) ? `<b>de ${añoDe(a)}</b>` : ''].filter(Boolean).join(' · ');
@@ -644,6 +646,7 @@ function openAusForm(existing, preset = {}) {
   const isEdit = !!existing, y0 = db.trabajo['año'];
   const f = existing ? { ...existing, 'año': añoDe(existing), medio: !!existing.medio } : { tipo: 'vacaciones', nombre: '', desde: '', hasta: '', estado: 'por_pedir', 'año': y0, medio: false, ...preset };
   if (!TIPOS_AUS[f.tipo]) f.tipo = 'vacaciones';
+  if (f.estado === 'disfrutado') f.estado = 'aprobado'; // los antiguos «Disfrutado»: aprobado y ya pasado, que se ve igual
   // «Hasta» vacío lleva dentro la fecha de «Desde» (sin mostrarla): así su calendario se abre en ese día y no en hoy
   const dateRow = (k, label) => `<div class="frow"><span>${label}</span><span class="v ${f[k] ? '' : 'ph'}">${f[k] ? `${DAYS[parseDia(f[k]).getDay()]}, ${fmtDia(f[k])}` : 'Seleccionar ›'}</span><input type="date" data-valor="${f[k] || (k === 'hasta' ? f.desde : '') || ''}" data-on="${k}"></div>`;
   // Medio día solo tiene sentido si es un único día
@@ -663,7 +666,7 @@ function openAusForm(existing, preset = {}) {
         : `${f.hasta ? '' : 'Sin «Hasta», será solo ese día: '}${n === .5 ? 'medio día laborable' : plural(n, 'día laborable', 'días laborables')} (sin fines de semana, fiestas nacionales ni 24 y 31 de diciembre).`}</div>` : ''}
       ${fes ? '' : `<div class="frow"><span>Cuenta para</span><span class="v">Días de ${f['año']} ›</span><select class="overlay" data-on="año">${años.map(a => `<option value="${a}" ${a === f['año'] ? 'selected' : ''}>Días de ${a}</option>`).join('')}</select></div>`}
       ${fes ? '<div class="small" style="padding:6px 0">Un día no laborable que no sale solo, como las fiestas nacionales o el 24 y 31 de diciembre: se ve en rojo y no descuenta de ningún sitio.</div>'
-        : `<div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
+        : `<div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS_ELEGIR).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
       <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`;
     },
     actions: {
@@ -736,7 +739,7 @@ function openTotales() {
 const MONTHS_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const mesNombre = m => MONTHS_L[m][0].toUpperCase() + MONTHS_L[m].slice(1);
 const CLASE_ESTADO = { disfrutado: 'ok', aprobado: 'ok', pedido: 'pend', por_pedir: 'plan' };
-const LEYENDA = [['fin', 'Fin de semana'], ['nac', 'Festivo (nacional o de empresa)'], ['ok','Aprobado o disfrutado'], ['pend', 'Pedido, sin aprobar'], ['plan', 'Planificado, sin pedir'], ['ok medio', 'Medio día']];
+const LEYENDA = [['fin', 'Fin de semana'], ['nac', 'Festivo'], ['ok','Aprobado o disfrutado'], ['pend', 'Pedido, sin aprobar'], ['plan', 'Planificado, sin pedir'], ['ok medio', 'Medio día']];
 function infoDia(f) {
   const d = parseDia(f), finde = d.getDay() === 0 || d.getDay() === 6;
   const nl = noLaborables(d.getFullYear()).find(([x]) => x === f);
