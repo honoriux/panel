@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.1';
+const APP_VERSION = 'panel-2026-11-25.2';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -508,20 +508,21 @@ function openElementoForm(e) {
    Para la empresa los festivos son una cantidad de días, no fechas: se gastan el día que se quiera.
    Cada día pedido cuenta para un año ("año" de la ausencia), que puede no ser el de su fecha
    (por ejemplo, días de enero de 2027 que son de las vacaciones de 2026). Un día suelto puede ser medio día ("medio").
-   «Festivo»: un festivo que la empresa ya fija en una fecha (no se puede pedir otro día). Gasta de la bolsa como los demás,
-   se ve en rojo en el calendario como las fiestas nacionales y no cuenta como laborable para las demás peticiones. */
+   «Festivo»: un día no laborable que no sale solo (como las fiestas nacionales o el 24 y 31 de diciembre). No descuenta
+   de nada ni cuenta para ningún año: se ve en rojo en el calendario, va con los no laborables y no cuenta como
+   laborable para las demás peticiones. */
 const TIPOS_AUS = {
   vacaciones: { n: 'Vacaciones', icon: '🏖️', color: '#e8659b' },
   asuntos_propios: { n: 'Libre disposición', icon: '🗓️', color: '#5b9cf0' },
-  festivo: { n: 'Festivo fijado por la empresa', icon: '🎉', color: '#e0605f' },
+  festivo: { n: 'Festivo', icon: '🎉', color: '#e0605f' },
   otro: { n: 'Otro (no descuenta)', icon: '📄', color: '#7a7f8c' },
 };
 const esFestivo = a => a.tipo === 'festivo';
 // Fechas de los festivos fijados por la empresa (para no contarlas como laborables en otras peticiones)
 const fechasFestivos = () => { const s = new Set(); for (const a of db.trabajo.ausencias) if (esFestivo(a)) for (let d = parseDia(a.desde); dayKey(d) <= a.hasta; d.setDate(d.getDate() + 1)) s.add(dayKey(d)); return s; };
 const ESTADOS = { por_pedir: 'Por pedir', pedido: 'Pedido', aprobado: 'Aprobado', disfrutado: 'Disfrutado' };
-const descuenta = a => a.tipo === 'vacaciones' || a.tipo === 'asuntos_propios' || a.tipo === 'festivo';
-const añoDe = a => a['año'] || +a.desde.slice(0, 4);
+const descuenta = a => a.tipo === 'vacaciones' || a.tipo === 'asuntos_propios';
+const añoDe = a => (!esFestivo(a) && a['año']) || +a.desde.slice(0, 4); // un festivo es del año en que cae
 const aus = id => db.trabajo.ausencias.find(a => a.id === id);
 // Aprobada y ya pasada cuenta sola como disfrutada (sin tocar el dato guardado)
 const estadoReal = a => { const e = esFestivo(a) ? 'aprobado' : a.estado; return e === 'aprobado' && a.hasta < hoy() ? 'disfrutado' : e; }; // un festivo siempre está concedido
@@ -620,8 +621,10 @@ function viewTrabajo() {
   if (vista === 'año') return seg + viewAñoCal();
   const y = db.trabajo['año'];
   const tareas = pendientes('trabajo');
-  const ausencias = db.trabajo.ausencias.filter(a => añoDe(a) === y).sort((a, b) => a.desde.localeCompare(b.desde));
-  const noLab = noLaborables(y);
+  const ausencias = db.trabajo.ausencias.filter(a => añoDe(a) === y && !esFestivo(a)).sort((a, b) => a.desde.localeCompare(b.desde));
+  // No laborables: los fijos (nacionales y de empresa) y los festivos añadidos a mano, que se pueden editar
+  const festivos = db.trabajo.ausencias.filter(a => esFestivo(a) && añoDe(a) === y);
+  const noLab = [...noLaborables(y).map(x => ({ f: x[0], x })), ...festivos.map(a => ({ f: a.desde, a }))].sort((p, q) => p.f.localeCompare(q.f));
   return `${seg}<div class="accrow"><button class="accsel" data-act="pickAño"><span>${y}</span>${I.down}</button></div>
     ${tarjetaDias(y)}
     <h2 class="sec">Tareas de trabajo</h2>
@@ -631,7 +634,10 @@ function viewTrabajo() {
     ${ausencias.map(ausRow).join('')}
     <button class="addcard" data-act="newAus" style="margin-top:10px">+ Pedir días</button>
     <button class="fold" data-act="toggleNoLab">${ui.verNoLab ? '▾' : '▸'} No laborables de ${y} (${noLab.length}): no se piden</button>
-    ${ui.verNoLab ? noLab.map(([f, n, k]) => `<div class="row done"><span class="ico" style="background:var(--line)">${k === 'empresa' ? '🏢' : '📅'}</span><div class="main"><div class="name">${n}</div><div class="sub">${DAYS[parseDia(f).getDay()]}, ${fmtDia(f)} · ${k === 'empresa' ? 'Lo da la empresa' : 'Fiesta nacional'}</div></div></div>`).join('') : ''}`;
+    ${ui.verNoLab ? noLab.map(({ x, a }) => a
+      ? `<button class="row" data-act="editAus" data-id="${a.id}"><span class="ico" style="background:var(--line)">🎉</span><div class="main"><div class="name">${esc(a.nombre || 'Festivo')}</div><div class="sub">${rangoTxt(a)} · Festivo añadido</div></div><span class="chev">›</span></button>`
+      : `<div class="row done"><span class="ico" style="background:var(--line)">${x[2] === 'empresa' ? '🏢' : '📅'}</span><div class="main"><div class="name">${x[1]}</div><div class="sub">${DAYS[parseDia(x[0]).getDay()]}, ${fmtDia(x[0])} · ${x[2] === 'empresa' ? 'Lo da la empresa' : 'Fiesta nacional'}</div></div></div>`).join('') : ''}
+    <button class="addcard" data-act="newFestivo" style="margin-top:8px">+ Añadir festivo</button>`;
 }
 
 function openAusForm(existing, preset = {}) {
@@ -645,18 +651,18 @@ function openAusForm(existing, preset = {}) {
   openSheet({
     cls: 'full',
     render: () => {
-      const t = TIPOS_AUS[f.tipo], fes = f.tipo === 'festivo', n = diasLaborables(f.desde, f.hasta || f.desde, fes) * (unDia() && f.medio && !fes ? .5 : 1);
+      const t = TIPOS_AUS[f.tipo], fes = f.tipo === 'festivo', n = diasLaborables(f.desde, f.hasta || f.desde) * (unDia() && f.medio ? .5 : 1);
       const años = [...new Set([y0 - 1, y0, y0 + 1, f['año']])].sort();
-      return `${head(isEdit ? 'Editar' : 'Pedir días')}
+      return `${head(isEdit ? 'Editar' : fes ? 'Añadir festivo' : 'Pedir días')}
       <div class="frow"><span>Tipo</span><span class="v">${ico(t)} ${t.n} ›</span><select class="overlay" data-on="tipo">${Object.entries(TIPOS_AUS).map(([k, v]) => `<option value="${k}" ${k === f.tipo ? 'selected' : ''}>${v.icon} ${v.n}</option>`).join('')}</select></div>
       <div class="field"><label>Nombre (opcional)</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="Ej. Navidad en casa"></div>
       ${dateRow('desde', 'Desde')}
       ${dateRow('hasta', 'Hasta')}
       ${unDia() && !fes ? `<button class="set-row" data-act="medio"><span class="t">Medio día</span><span class="switch ${f.medio ? 'on' : ''}"></span></button>` : ''}
-      ${f.desde ? `<div class="small" style="padding:8px 0">${f.hasta && f.hasta < f.desde ? '<span class="red">La fecha final es anterior a la inicial.</span>'
+      ${f.desde && !fes ? `<div class="small" style="padding:8px 0">${f.hasta && f.hasta < f.desde ? '<span class="red">La fecha final es anterior a la inicial.</span>'
         : `${f.hasta ? '' : 'Sin «Hasta», será solo ese día: '}${n === .5 ? 'medio día laborable' : plural(n, 'día laborable', 'días laborables')} (sin fines de semana, fiestas nacionales ni 24 y 31 de diciembre).`}</div>` : ''}
-      <div class="frow"><span>Cuenta para</span><span class="v">Días de ${f['año']} ›</span><select class="overlay" data-on="año">${años.map(a => `<option value="${a}" ${a === f['año'] ? 'selected' : ''}>Días de ${a}</option>`).join('')}</select></div>
-      ${fes ? '<div class="small" style="padding:6px 0">Un festivo que ya viene fijado en el calendario de la empresa: se ve en rojo, gasta de los festivos del año y no se cuenta en las demás peticiones.</div>'
+      ${fes ? '' : `<div class="frow"><span>Cuenta para</span><span class="v">Días de ${f['año']} ›</span><select class="overlay" data-on="año">${años.map(a => `<option value="${a}" ${a === f['año'] ? 'selected' : ''}>Días de ${a}</option>`).join('')}</select></div>`}
+      ${fes ? '<div class="small" style="padding:6px 0">Un día no laborable que no sale solo, como las fiestas nacionales o el 24 y 31 de diciembre: se ve en rojo y no descuenta de ningún sitio.</div>'
         : `<div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
       <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`;
     },
@@ -682,7 +688,7 @@ function openAusForm(existing, preset = {}) {
         const hasta = f.hasta || f.desde;
         if (hasta < f.desde) return toast('La fecha final es anterior a la inicial');
         const fes = f.tipo === 'festivo';
-        const d = { tipo: f.tipo, nombre: f.nombre.trim(), desde: f.desde, hasta, estado: fes ? 'aprobado' : f.estado, 'año': f['año'], medio: !fes && hasta === f.desde && !!f.medio };
+        const d = { tipo: f.tipo, nombre: f.nombre.trim(), desde: f.desde, hasta, estado: fes ? 'aprobado' : f.estado, 'año': fes ? +f.desde.slice(0, 4) : f['año'], medio: !fes && hasta === f.desde && !!f.medio };
         if (isEdit) Object.assign(existing, d);
         else db.trabajo.ausencias.push({ id: uid(), ...d });
         save(); s.close(); render(); toast(isEdit ? 'Guardado' : 'Añadido');
@@ -792,7 +798,7 @@ function openDia(f) {
   else if (info.finde) lineas.push(`<div class="row"><i class="d fin sw"></i><div class="main"><div class="name">Fin de semana</div></div></div>`);
   for (const a of info.pedidos) {
     const e = estadoReal(a);
-    lineas.push(`<button class="row" data-act="edit" data-id="${a.id}"><i class="d ${CLASE_ESTADO[e]}${a.medio ? ' medio' : ''} sw"></i><div class="main"><div class="name">${esc(a.nombre || TIPOS_AUS[a.tipo]?.n)}</div><div class="sub">${rangoTxt(a)}${a.medio ? ' · medio día' : ''} · ${ESTADOS[e]}${descuenta(a) ? ` · días de ${añoDe(a)}` : ''}</div></div><span class="chev">›</span></button>`);
+    lineas.push(`<button class="row" data-act="edit" data-id="${a.id}"><i class="d ${esFestivo(a) ? 'nac' : CLASE_ESTADO[e]}${a.medio ? ' medio' : ''} sw"></i><div class="main"><div class="name">${esc(a.nombre || TIPOS_AUS[a.tipo]?.n)}</div><div class="sub">${esFestivo(a) ? 'Festivo · no se pide' : `${rangoTxt(a)}${a.medio ? ' · medio día' : ''} · ${ESTADOS[e]}${descuenta(a) ? ` · días de ${añoDe(a)}` : ''}`}</div></div><span class="chev">›</span></button>`);
   }
   if (!lineas.length) lineas.push(`<div class="row"><i class="d sw"></i><div class="main"><div class="name">Día laborable</div></div></div>`);
   const puedePedir = !info.nl && !info.finde && !info.pedidos.length;
@@ -1080,6 +1086,7 @@ const mainActions = {
   irGastos: () => { Savey.irAlMes(); ui.tab = 'gastos'; render(); window.scrollTo(0, 0); },
   toggleCompletadas: () => { ui.verCompletadas = !ui.verCompletadas; render(); },
   añadirItem: () => { const i = $('#addItem'); if (i) añadirElemento(i, document.activeElement === i); },
+  newFestivo: () => openAusForm(null, { tipo: 'festivo' }),
   toggleCumples: () => { ui.verCumples = !ui.verCumples; render(); },
   toggleTarea: t => { const x = tarea(t.dataset.id); if (x) toggleTarea(x); },
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
