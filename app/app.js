@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.6';
+const APP_VERSION = 'panel-2026-11-25.7';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -41,7 +41,7 @@ function load() {
 }
 function normalize() {
   const d = defaultDB();
-  db.settings = Object.assign({}, SETTINGS_DEFAULT, db.settings || {});
+  db.settings = Object.assign(db.settings || {}, { ...SETTINGS_DEFAULT, ...db.settings }); // el mismo objeto, completado
   db.caducidades = db.caducidades || [];
   db.tareas = db.tareas || [];
   // Tareas y caducidades están unificadas: las caducidades (de copias antiguas u otro dispositivo sin actualizar) pasan a tareas
@@ -939,7 +939,9 @@ async function comprobarVersion() {
   } catch (e) { nuevaVersion = ''; }
 }
 function openSettings() {
-  const st = db.settings;
+  // db.settings se lee siempre de nuevo: una sincronización puede sustituir el objeto mientras la hoja está abierta
+  // (antes se guardaba aquí y, tras sincronizar, los cambios de tema iban a un objeto viejo y no se aplicaban).
+  const st = new Proxy({}, { get: (o, k) => db.settings[k], set: (o, k, v) => { db.settings[k] = v; return true; } });
   nuevaVersion = null;
   comprobarVersion().then(() => sheets.forEach(x => x.live && x.refreshLive()));
   const sel = (key, opts) => `<select data-on="set" data-k="${key}">${Object.entries(opts).map(([k, l]) => `<option value="${k}" ${st[key] === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
@@ -947,7 +949,7 @@ function openSettings() {
     cls: 'full',
     render: () => `${head('Configuración')}
       <div class="set-h">Apariencia</div>
-      <div class="set-row"><span class="ic">☾</span><span class="t">Modo oscuro</span><span class="v">${{ light: 'Claro', dark: 'Oscuro', auto: 'Automático' }[st.theme]} ${I.down.replace('<svg', '<svg width="12" height="12"')}</span>${sel('theme', { auto: 'Automático', light: 'Claro', dark: 'Oscuro' })}</div>
+      <div class="set-row"><span class="ic">☾</span><span class="t">Tema</span><span class="v">${{ light: 'Claro', dark: 'Oscuro', auto: 'Automático' }[st.theme]} ${I.down.replace('<svg', '<svg width="12" height="12"')}</span>${sel('theme', { auto: 'Automático', light: 'Claro', dark: 'Oscuro' })}</div>
       <div class="set-h">Sincronización</div>
       <button class="set-row" data-act="syncSetup"><span class="ic">⇅</span><span class="t">${sync?.token ? 'GitHub: ' + esc(sync.owner + '/' + sync.repo) : 'Sincronizar entre dispositivos'}<div class="small">${esc(syncStatus())}</div></span>›</button>
       ${sync?.token ? `<button class="set-row" data-act="syncNow"><span class="ic">⟳</span><span class="t">Sincronizar ahora</span></button>
