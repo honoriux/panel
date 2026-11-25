@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.7';
+const APP_VERSION = 'panel-2026-11-25.8';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -127,17 +127,17 @@ function toast(msg) {
 const UI_KEY = 'panel.ui';
 const ui = { tab: 'home' };
 /* Como las demás apps del móvil: al abrirla de nuevo (o tras REINICIO_MIN sin usarla) empieza en Inicio, Tareas en Todas,
-   Listas en el resumen y Gastos en Línea temporal. Solo se conserva dónde estabas si la recarga es una actualización
-   automática (marca en sessionStorage) o si vuelves antes de ese tiempo. La vista de Trabajo (lista, mes, año) se recuerda siempre. */
+   Listas en el resumen, Trabajo en el mes actual y Gastos en Línea temporal. Solo se conserva dónde estabas si la recarga
+   es una actualización automática (marca en sessionStorage) o si vuelves antes de ese tiempo. */
 const REINICIO_MIN = 15;
 let mantenerUi = false;
 try { mantenerUi = sessionStorage.getItem('panel.mantenerUi') === '1'; sessionStorage.removeItem('panel.mantenerUi'); } catch (e) { }
 try {
   const saved = JSON.parse(localStorage.getItem(UI_KEY)) || {};
-  for (const k of mantenerUi ? ['tab', 'filtroTareas', 'vistaTrabajo', 'lista'] : ['vistaTrabajo']) if (saved[k]) ui[k] = saved[k];
+  if (mantenerUi) for (const k of ['tab', 'filtroTareas', 'vistaTrabajo', 'lista']) if (saved[k]) ui[k] = saved[k];
 } catch (e) { }
 function reiniciarUi() {
-  Object.assign(ui, { tab: 'home', filtroTareas: 'todas', lista: null, verCompletadas: false, verCumples: false });
+  Object.assign(ui, { tab: 'home', filtroTareas: 'todas', lista: null, vistaTrabajo: 'mes', calY: null, verCompletadas: false, verCumples: false });
   Savey.reiniciar(); saveUi(); window.scrollTo(0, 0);
 }
 let ocultaDesde = 0;
@@ -624,7 +624,7 @@ function tarjetaDias(y, compacta = false) {
 }
 
 function viewTrabajo() {
-  const vista = ui.vistaTrabajo || 'lista';
+  const vista = ui.vistaTrabajo || 'mes';
   const seg = `<div class="seg" style="margin:6px 0 10px">${[['lista', 'Lista'], ['mes', 'Mes'], ['año', 'Año']].map(([k, l]) => `<button class="${vista === k ? 'on' : ''}" data-act="vistaTrabajo" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (vista === 'mes') return seg + viewMes();
   if (vista === 'año') return seg + viewAñoCal();
@@ -1088,7 +1088,16 @@ function backupBanner() {
 
 /* ---------------- Acciones de la vista principal ---------------- */
 const mainActions = {
-  tab: t => { if (t.dataset.tab === 'listas' && ui.tab === 'listas') ui.lista = null; ui.tab = t.dataset.tab; render(); window.scrollTo(0, 0); },
+  // Volver a pulsar la pestaña en la que estás la lleva a su inicio: Listas al resumen, Tareas a Todas y Trabajo al mes actual
+  tab: t => {
+    const k = t.dataset.tab;
+    if (k === ui.tab) {
+      if (k === 'listas') ui.lista = null;
+      if (k === 'tareas') ui.filtroTareas = 'todas';
+      if (k === 'trabajo') { ui.vistaTrabajo = 'mes'; ui.calY = null; }
+    }
+    ui.tab = k; render(); window.scrollTo(0, 0);
+  },
   avisosSetup: () => openAvisos(),
   settings: () => openSettings(),
   backup: () => exportBackup(),
