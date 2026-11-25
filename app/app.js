@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.8';
+const APP_VERSION = 'panel-2026-11-25.9';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -1088,13 +1088,15 @@ function backupBanner() {
 
 /* ---------------- Acciones de la vista principal ---------------- */
 const mainActions = {
-  // Volver a pulsar la pestaña en la que estás la lleva a su inicio: Listas al resumen, Tareas a Todas y Trabajo al mes actual
+  // Volver a pulsar la pestaña en la que estás la lleva a su inicio: Listas al resumen, Tareas a Todas, Trabajo al mes actual
+  // y Gastos a Línea temporal del mes actual
   tab: t => {
     const k = t.dataset.tab;
     if (k === ui.tab) {
       if (k === 'listas') ui.lista = null;
       if (k === 'tareas') ui.filtroTareas = 'todas';
       if (k === 'trabajo') { ui.vistaTrabajo = 'mes'; ui.calY = null; }
+      if (k === 'gastos') Savey.reiniciar();
     }
     ui.tab = k; render(); window.scrollTo(0, 0);
   },
