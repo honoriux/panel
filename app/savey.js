@@ -233,7 +233,7 @@ function processRecurring() {
 /* ---------------- Estado de la interfaz ---------------- */
 const now0 = new Date();
 const UI_KEY = 'panel.savey.ui';
-const ui = { tab: 'home', y: now0.getFullYear(), m: now0.getMonth(), acc: 'all', ideasType: 'expense' };
+const ui = { tab: 'timeline', y: now0.getFullYear(), m: now0.getMonth(), acc: 'all', ideasType: 'expense' };
 try { // recuerda pestaña, cuenta seleccionada y tipo de Ideas entre recargas
   const saved = JSON.parse(localStorage.getItem(UI_KEY)) || {};
   for (const k of ['tab', 'acc', 'ideasType']) if (saved[k]) ui[k] = saved[k];
@@ -273,7 +273,7 @@ const I = {
 function render() { globalThis.render(); } // Panel redibuja y pide view() y top()
 function view() {
   if (ui.acc !== 'all' && !acc(ui.acc)) ui.acc = 'all';
-  if (!PANTALLAS[ui.tab]) ui.tab = 'home';
+  if (!PANTALLAS[ui.tab]) ui.tab = 'timeline';
   saveUi();
   const v = { home: viewHome, timeline: viewTimeline, ideas: viewIdeas, accounts: viewAccounts }[ui.tab];
   return `<div class="sv">${v()}</div>`;
@@ -878,7 +878,8 @@ function exportCsv() {
 }
 
 /* ---------------- Menú ☰: pantallas de Savey (siempre dentro de la pestaña Gastos) ---------------- */
-const PANTALLAS = { home: ['Inicio', 'home'], timeline: ['Línea temporal', 'list'], ideas: ['Ideas', 'ideas'], accounts: ['Cuentas', 'wallet'] };
+// Gastos se abre en Línea temporal; «Resumen» es el antiguo Inicio de Savey. Las cuentas se ven y editan en «Editar cuentas».
+const PANTALLAS = { timeline: ['Línea temporal', 'list'], home: ['Resumen', 'home'], ideas: ['Ideas', 'ideas'] };
 function openMenu() {
   openSheet({
     render: () => `${head('Gastos')}<div class="menu-list">
@@ -1137,6 +1138,8 @@ return {
   nuevo: () => openTxForm(null),
   // Para la tarjeta de Inicio: lo gastado e ingresado este mes en todas las cuentas, y abrir Gastos en el mes actual
   resumenMes: () => { const d = new Date(), s = monthStats(d.getFullYear(), d.getMonth(), 'all'); return { ...s, mes: MONTHS_L[d.getMonth()], gastado: money(s.exp), balance: money(s.bal, { sign: true }) }; },
+  // Al abrir la app o tras un rato sin usarla: Línea temporal del mes actual
+  reiniciar: () => { const d = new Date(); ui.tab = 'timeline'; ui.y = d.getFullYear(); ui.m = d.getMonth(); saveUi(); },
   irAlMes: () => { const d = new Date(); ui.y = d.getFullYear(); ui.m = d.getMonth(); ui.tab = 'home'; },
   swipe: dx => { if (ui.tab !== 'accounts') (dx < 0 ? mainActions.nextMonth : mainActions.prevMonth)(); },
   alVolver: () => { if (processRecurring()) render(); syncNow(); },

@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-20.7';
+const APP_VERSION = 'panel-2026-11-25.1';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -126,10 +126,21 @@ function toast(msg) {
 /* ---------------- Estado de la interfaz ---------------- */
 const UI_KEY = 'panel.ui';
 const ui = { tab: 'home' };
-try { // recuerda pestaña, filtro de tareas y lista abierta entre recargas
+/* Como las demás apps del móvil: al abrirla de nuevo (o tras REINICIO_MIN sin usarla) empieza en Inicio, Tareas en Todas,
+   Listas en el resumen y Gastos en Línea temporal. Solo se conserva dónde estabas si la recarga es una actualización
+   automática (marca en sessionStorage) o si vuelves antes de ese tiempo. La vista de Trabajo (lista, mes, año) se recuerda siempre. */
+const REINICIO_MIN = 15;
+let mantenerUi = false;
+try { mantenerUi = sessionStorage.getItem('panel.mantenerUi') === '1'; sessionStorage.removeItem('panel.mantenerUi'); } catch (e) { }
+try {
   const saved = JSON.parse(localStorage.getItem(UI_KEY)) || {};
-  for (const k of ['tab', 'filtroTareas', 'vistaTrabajo', 'lista']) if (saved[k]) ui[k] = saved[k];
+  for (const k of mantenerUi ? ['tab', 'filtroTareas', 'vistaTrabajo', 'lista'] : ['vistaTrabajo']) if (saved[k]) ui[k] = saved[k];
 } catch (e) { }
+function reiniciarUi() {
+  Object.assign(ui, { tab: 'home', filtroTareas: 'todas', lista: null, verCompletadas: false, verCumples: false });
+  Savey.reiniciar(); saveUi(); window.scrollTo(0, 0);
+}
+let ocultaDesde = 0;
 function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ tab: ui.tab, filtroTareas: ui.filtroTareas, vistaTrabajo: ui.vistaTrabajo, lista: ui.lista })); } catch (e) { } }
 
 /* ---------------- Iconos SVG ---------------- */
@@ -150,6 +161,7 @@ const I = {
   })(),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   home: svg('<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h4.5v-5h3v5H18V9.5"/>'),
+  tick: svg('<path d="M5 12.5l4.5 4.5L19 7"/>'),
   check: svg('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/>'),
   chart: svg('<path d="M3 17l5-6 4 3 6-8 3 3"/><path d="M3 21h18"/>'),
   list: svg('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>'),
@@ -408,18 +420,19 @@ function viewListas() {
   const hechos = items.filter(e => e.hecho).sort((a, b) => (b.u || 0) - (a.u || 0));
   const borrador = ui.borrador?.lista === l.id ? ui.borrador.texto : '';
   return `<div class="lista-cab"><button class="link" data-act="cerrarLista">‹ Listas</button><button class="link" data-act="editLista">Editar lista</button></div>
-    <div class="field lista-add"><input id="addItem" data-lista="${l.id}" value="${esc(borrador)}" placeholder="Añadir a ${esc(l.nombre)}…" enterkeyhint="done" autocomplete="off" autocapitalize="sentences"></div>
+    <div class="field lista-add"><input id="addItem" data-lista="${l.id}" value="${esc(borrador)}" placeholder="Añadir a ${esc(l.nombre)}…" enterkeyhint="done" autocomplete="off" autocapitalize="sentences"><button class="add-ok" data-act="añadirItem" aria-label="Añadir">${I.tick}</button></div>
     ${pend.length ? pend.map(elementoRow).join('') : `<div class="empty-state" style="padding:22px 10px">${hechos.length ? 'Todo tachado.' : 'No hay nada apuntado.'}<br>Escribe arriba y pulsa Intro para añadir.</div>`}
     ${hechos.length ? `<button class="fold" data-act="toggleTachados">${ui.verTachados ? '▾' : '▸'} Tachados (${hechos.length})</button>${ui.verTachados ? hechos.map(elementoRow).join('') : ''}
       <button class="link" data-act="quitarTachados">Quitar tachados</button>` : ''}`;
 }
 // Apunta lo escrito en el campo de arriba y deja el cursor ahí para seguir apuntando
-function añadirElemento(inp) {
+// (con el botón ✓ y el teclado cerrado, no se vuelve a abrir el teclado)
+function añadirElemento(inp, enfocar = true) {
   const texto = inp.value.trim(), l = lista(inp.dataset.lista);
   if (!texto || !l) return;
   db.elementos.push({ id: uid(), lista: l.id, texto, nota: '', hecho: false, creado: Date.now() });
   ui.borrador = null; save(); render();
-  $('#addItem')?.focus();
+  if (enfocar) $('#addItem')?.focus();
 }
 function abrirLista(id, enfocar = false) {
   ui.tab = 'listas'; ui.lista = id; ui.verTachados = false; render(); window.scrollTo(0, 0);
@@ -494,18 +507,24 @@ function openElementoForm(e) {
    más los festivos locales y autonómicos que la empresa da ese año como días a pedir (trabajo.festivos[año]).
    Para la empresa los festivos son una cantidad de días, no fechas: se gastan el día que se quiera.
    Cada día pedido cuenta para un año ("año" de la ausencia), que puede no ser el de su fecha
-   (por ejemplo, días de enero de 2027 que son de las vacaciones de 2026). Un día suelto puede ser medio día ("medio"). */
+   (por ejemplo, días de enero de 2027 que son de las vacaciones de 2026). Un día suelto puede ser medio día ("medio").
+   «Festivo»: un festivo que la empresa ya fija en una fecha (no se puede pedir otro día). Gasta de la bolsa como los demás,
+   se ve en rojo en el calendario como las fiestas nacionales y no cuenta como laborable para las demás peticiones. */
 const TIPOS_AUS = {
   vacaciones: { n: 'Vacaciones', icon: '🏖️', color: '#e8659b' },
   asuntos_propios: { n: 'Libre disposición', icon: '🗓️', color: '#5b9cf0' },
+  festivo: { n: 'Festivo fijado por la empresa', icon: '🎉', color: '#e0605f' },
   otro: { n: 'Otro (no descuenta)', icon: '📄', color: '#7a7f8c' },
 };
+const esFestivo = a => a.tipo === 'festivo';
+// Fechas de los festivos fijados por la empresa (para no contarlas como laborables en otras peticiones)
+const fechasFestivos = () => { const s = new Set(); for (const a of db.trabajo.ausencias) if (esFestivo(a)) for (let d = parseDia(a.desde); dayKey(d) <= a.hasta; d.setDate(d.getDate() + 1)) s.add(dayKey(d)); return s; };
 const ESTADOS = { por_pedir: 'Por pedir', pedido: 'Pedido', aprobado: 'Aprobado', disfrutado: 'Disfrutado' };
-const descuenta = a => a.tipo === 'vacaciones' || a.tipo === 'asuntos_propios';
+const descuenta = a => a.tipo === 'vacaciones' || a.tipo === 'asuntos_propios' || a.tipo === 'festivo';
 const añoDe = a => a['año'] || +a.desde.slice(0, 4);
 const aus = id => db.trabajo.ausencias.find(a => a.id === id);
 // Aprobada y ya pasada cuenta sola como disfrutada (sin tocar el dato guardado)
-const estadoReal = a => a.estado === 'aprobado' && a.hasta < hoy() ? 'disfrutado' : a.estado;
+const estadoReal = a => { const e = esFestivo(a) ? 'aprobado' : a.estado; return e === 'aprobado' && a.hasta < hoy() ? 'disfrutado' : e; }; // un festivo siempre está concedido
 
 // Domingo de Pascua (algoritmo de Meeus/Jones/Butcher), para el Viernes Santo
 function pascua(y) {
@@ -551,17 +570,19 @@ const festivosCalculo = y => FESTIVOS_DEFECTO[y] ?? festivosSevilla(y).length;
 // Lo que se usa: el número puesto a mano en la app para ese año o, si no hay, el calculado
 const festivosAño = y => db.trabajo.festivos?.[y] ?? festivosCalculo(y);
 
-// Días laborables de un periodo: de lunes a viernes, sin fiestas nacionales ni días de empresa.
-function diasLaborables(desde, hasta) {
+// Días laborables de un periodo: de lunes a viernes, sin fiestas nacionales, días de empresa ni festivos fijados
+// (salvo para contar el propio festivo: conFestivos).
+function diasLaborables(desde, hasta, conFestivos = false) {
   if (!desde || !hasta || hasta < desde) return 0;
+  const fest = conFestivos ? new Set() : fechasFestivos();
   let n = 0;
   for (let d = parseDia(desde), g = 0; dayKey(d) <= hasta && g < 800; d.setDate(d.getDate() + 1), g++) {
-    if (d.getDay() !== 0 && d.getDay() !== 6 && !esNoLaborable(dayKey(d))) n++;
+    if (d.getDay() !== 0 && d.getDay() !== 6 && !esNoLaborable(dayKey(d)) && !fest.has(dayKey(d))) n++;
   }
   return n;
 }
 // Días que gasta una petición (medio día = 0,5)
-const diasDe = a => diasLaborables(a.desde, a.hasta) * (a.medio ? .5 : 1);
+const diasDe = a => diasLaborables(a.desde, a.hasta, esFestivo(a)) * (a.medio ? .5 : 1);
 function contadorDias(y = db.trabajo['año']) {
   const fest = festivosAño(y), base = db.trabajo.vacacionesTotales || 0;
   const l = db.trabajo.ausencias.filter(a => descuenta(a) && añoDe(a) === y);
@@ -579,7 +600,7 @@ function ausRow(a) {
   const t = TIPOS_AUS[a.tipo] || TIPOS_AUS.otro;
   const sub = [rangoTxt(a), descuenta(a) ? diasTxt(diasDe(a)) : 'no descuenta', añoDe(a) !== +a.desde.slice(0, 4) ? `<b>de ${añoDe(a)}</b>` : ''].filter(Boolean).join(' · ');
   return `<div class="row ${estadoReal(a) === 'disfrutado' ? 'done' : ''}"><button class="rowmain" data-act="editAus" data-id="${a.id}">${ico(t)}
-    <div class="main"><div class="name">${esc(a.nombre || t.n)}</div><div class="sub">${sub}</div></div></button>${estadoChip(a)}</div>`;
+    <div class="main"><div class="name">${esc(a.nombre || t.n)}</div><div class="sub">${sub}</div></div></button>${esFestivo(a) ? '<span class="tag red">Festivo</span>' : estadoChip(a)}</div>`;
 }
 function tarjetaDias(y, compacta = false) {
   const c = contadorDias(y), pct = v => c.total ? Math.min(100, v / c.total * 100) : 0;
@@ -624,18 +645,19 @@ function openAusForm(existing, preset = {}) {
   openSheet({
     cls: 'full',
     render: () => {
-      const t = TIPOS_AUS[f.tipo], n = diasLaborables(f.desde, f.hasta || f.desde) * (unDia() && f.medio ? .5 : 1);
+      const t = TIPOS_AUS[f.tipo], fes = f.tipo === 'festivo', n = diasLaborables(f.desde, f.hasta || f.desde, fes) * (unDia() && f.medio && !fes ? .5 : 1);
       const años = [...new Set([y0 - 1, y0, y0 + 1, f['año']])].sort();
       return `${head(isEdit ? 'Editar' : 'Pedir días')}
       <div class="frow"><span>Tipo</span><span class="v">${ico(t)} ${t.n} ›</span><select class="overlay" data-on="tipo">${Object.entries(TIPOS_AUS).map(([k, v]) => `<option value="${k}" ${k === f.tipo ? 'selected' : ''}>${v.icon} ${v.n}</option>`).join('')}</select></div>
       <div class="field"><label>Nombre (opcional)</label><input data-input="nombre" value="${esc(f.nombre)}" placeholder="Ej. Navidad en casa"></div>
       ${dateRow('desde', 'Desde')}
       ${dateRow('hasta', 'Hasta')}
-      ${unDia() ? `<button class="set-row" data-act="medio"><span class="t">Medio día</span><span class="switch ${f.medio ? 'on' : ''}"></span></button>` : ''}
+      ${unDia() && !fes ? `<button class="set-row" data-act="medio"><span class="t">Medio día</span><span class="switch ${f.medio ? 'on' : ''}"></span></button>` : ''}
       ${f.desde ? `<div class="small" style="padding:8px 0">${f.hasta && f.hasta < f.desde ? '<span class="red">La fecha final es anterior a la inicial.</span>'
         : `${f.hasta ? '' : 'Sin «Hasta», será solo ese día: '}${n === .5 ? 'medio día laborable' : plural(n, 'día laborable', 'días laborables')} (sin fines de semana, fiestas nacionales ni 24 y 31 de diciembre).`}</div>` : ''}
       <div class="frow"><span>Cuenta para</span><span class="v">Días de ${f['año']} ›</span><select class="overlay" data-on="año">${años.map(a => `<option value="${a}" ${a === f['año'] ? 'selected' : ''}>Días de ${a}</option>`).join('')}</select></div>
-      <div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      ${fes ? '<div class="small" style="padding:6px 0">Un festivo que ya viene fijado en el calendario de la empresa: se ve en rojo, gasta de los festivos del año y no se cuenta en las demás peticiones.</div>'
+        : `<div class="frow"><span>Estado</span><span class="v">${ESTADOS[f.estado]} ›</span><select class="overlay" data-on="estado">${Object.entries(ESTADOS).map(([k, l]) => `<option value="${k}" ${k === f.estado ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`}
       <div class="form-foot">${isEdit ? '<button class="btn ghost" data-act="del">Eliminar</button>' : ''}<button class="btn navy" data-act="save">Guardar</button></div>`;
     },
     actions: {
@@ -659,7 +681,8 @@ function openAusForm(existing, preset = {}) {
         if (!f.desde) return toast('Elige la fecha');
         const hasta = f.hasta || f.desde;
         if (hasta < f.desde) return toast('La fecha final es anterior a la inicial');
-        const d = { tipo: f.tipo, nombre: f.nombre.trim(), desde: f.desde, hasta, estado: f.estado, 'año': f['año'], medio: hasta === f.desde && !!f.medio };
+        const fes = f.tipo === 'festivo';
+        const d = { tipo: f.tipo, nombre: f.nombre.trim(), desde: f.desde, hasta, estado: fes ? 'aprobado' : f.estado, 'año': f['año'], medio: !fes && hasta === f.desde && !!f.medio };
         if (isEdit) Object.assign(existing, d);
         else db.trabajo.ausencias.push({ id: uid(), ...d });
         save(); s.close(); render(); toast(isEdit ? 'Guardado' : 'Añadido');
@@ -707,13 +730,13 @@ function openTotales() {
 const MONTHS_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const mesNombre = m => MONTHS_L[m][0].toUpperCase() + MONTHS_L[m].slice(1);
 const CLASE_ESTADO = { disfrutado: 'ok', aprobado: 'ok', pedido: 'pend', por_pedir: 'plan' };
-const LEYENDA = [['fin', 'Fin de semana'], ['nac', 'Fiesta nacional o de empresa'], ['ok','Aprobado o disfrutado'], ['pend', 'Pedido, sin aprobar'], ['plan', 'Planificado, sin pedir'], ['ok medio', 'Medio día']];
+const LEYENDA = [['fin', 'Fin de semana'], ['nac', 'Festivo (nacional o de empresa)'], ['ok','Aprobado o disfrutado'], ['pend', 'Pedido, sin aprobar'], ['plan', 'Planificado, sin pedir'], ['ok medio', 'Medio día']];
 function infoDia(f) {
   const d = parseDia(f), finde = d.getDay() === 0 || d.getDay() === 6;
   const nl = noLaborables(d.getFullYear()).find(([x]) => x === f);
   const pedidos = db.trabajo.ausencias.filter(a => a.desde <= f && a.hasta >= f);
   let cls = '', medio = false;
-  if (nl) cls = 'nac';
+  if (nl || (!finde && pedidos.some(esFestivo))) cls = 'nac';
   else if (finde) cls = 'fin';
   else if (pedidos.length) { cls = CLASE_ESTADO[estadoReal(pedidos[0])] || 'ok'; medio = !!pedidos[0].medio; }
   return { f, d, finde, nl, pedidos, cls: cls + (medio ? ' medio' : ''), medio };
@@ -930,7 +953,13 @@ function openSettings() {
       syncSetup: () => openSyncSetup(),
       avisosSetup: () => openAvisos(),
       saveySetup: () => Savey.ajustes(),
-      syncNow: (t, s) => { const p = syncNow(); s.refresh(); p.then(() => toast(sync?.lastError ? 'Error al sincronizar' : 'Sincronizado')); },
+      syncNow: (t, s) => {
+        const p = syncNow(); s.refresh();
+        p.then(async () => {
+          if (sync?.lastError) return toast('Error al sincronizar');
+          toast((await lanzarCalendario()) ? 'Sincronizado · Google Calendar, en un par de minutos' : 'Sincronizado (Google Calendar no: el token necesita el permiso Actions)');
+        });
+      },
       monthly: () => openMonthlyBackups(),
       backup: (t, s) => exportBackup().then(() => s.refresh()),
       restore: () => pickFile('.json,application/json', restoreBackup),
@@ -1050,6 +1079,7 @@ const mainActions = {
   nuevoGasto: () => Savey.nuevo(),
   irGastos: () => { Savey.irAlMes(); ui.tab = 'gastos'; render(); window.scrollTo(0, 0); },
   toggleCompletadas: () => { ui.verCompletadas = !ui.verCompletadas; render(); },
+  añadirItem: () => { const i = $('#addItem'); if (i) añadirElemento(i, document.activeElement === i); },
   toggleCumples: () => { ui.verCumples = !ui.verCumples; render(); },
   toggleTarea: t => { const x = tarea(t.dataset.id); if (x) toggleTarea(x); },
   editTarea: t => { const x = tarea(t.dataset.id); if (x) openTareaForm(x); },
@@ -1100,6 +1130,8 @@ document.addEventListener('click', ev => {
 document.addEventListener('keydown', ev => {
   if (ev.target.id === 'addItem' && ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); añadirElemento(ev.target); }
 });
+// El ✓ no quita el foco al campo: si el teclado está abierto, sigue abierto
+document.addEventListener('pointerdown', ev => { if (ev.target.closest('.add-ok')) ev.preventDefault(); });
 document.addEventListener('input', ev => {
   if (ev.target.id === 'addItem') ui.borrador = { lista: ev.target.dataset.lista, texto: ev.target.value };
 });
@@ -1267,6 +1299,15 @@ function scheduleSync(delay = 1500) {
   if (!sync?.token) return;
   clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, delay);
 }
+/* «Sincronizar ahora» lanza también el workflow «Google Calendar» de panel-data (calendario.yml) para no esperar a la
+   pasada de cada hora. Necesita que el token tenga el permiso «Actions: Read and write». El WhatsApp no se lanza:
+   repetiría el aviso del día. Devuelve si GitHub lo ha aceptado. */
+async function lanzarCalendario() {
+  try {
+    const r = await gh('/actions/workflows/calendario.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main' }) });
+    return r.status === 204;
+  } catch (e) { return false; }
+}
 async function syncNow() {
   clearTimeout(syncTimer); syncTimer = null;
   if (!sync?.token || !navigator.onLine) return;
@@ -1385,11 +1426,14 @@ function openSyncSetup() {
 
 /* ---------------- Arranque ---------------- */
 load();
+if (!mantenerUi) reiniciarUi();
 // El antiguo resumen de gastos de solo lectura ya no existe (ahora Gastos es Savey): se borra su token y su caché
 try { localStorage.removeItem('panel.gastos'); localStorage.removeItem('panel.gastos.resumen'); } catch (e) { }
 render();
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { if (syncTimer) syncNow(); Savey.alOcultar(); return; } // sube lo pendiente antes de que iOS congele la app
+  if (document.hidden) { ocultaDesde = Date.now(); if (syncTimer) syncNow(); Savey.alOcultar(); return; } // sube lo pendiente antes de que iOS congele la app
+  if (ocultaDesde && Date.now() - ocultaDesde > REINICIO_MIN * 60e3 && !sheets.length) reiniciarUi(); // mucho rato fuera: como recién abierta
+  ocultaDesde = 0;
   render(); // al volver a la app, recalcula los días restantes
   syncNow();
   Savey.alVolver(); // apunta los recurrentes que tocan y sincroniza con savey-data
@@ -1407,7 +1451,9 @@ if (navigator.storage?.persist) navigator.storage.persist().catch(() => { });
 let recargarPendiente = false;
 function recargarSiSePuede() {
   if (sheets.length || document.hidden) return; // se intenta otra vez al cerrar la hoja o al volver a la app
-  recargarPendiente = false; location.reload();
+  recargarPendiente = false;
+  try { sessionStorage.setItem('panel.mantenerUi', '1'); } catch (e) { } // una actualización no te saca de donde estabas
+  location.reload();
 }
 function buscarVersionNueva() {
   if (recargarPendiente) return recargarSiSePuede();

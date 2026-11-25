@@ -35,7 +35,7 @@ Igual que en SaveyCustom: los datos se guardan en un repositorio **privado** de 
    1. Tu foto → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
    2. *Token name*: `panel`. *Expiration*: la más larga que te deje.
    3. *Repository access*: **Only select repositories** → `panel-data`.
-   4. *Permissions → Repository permissions → Contents*: **Read and write**.
+   4. *Permissions → Repository permissions → Contents*: **Read and write**. Y, para que «Sincronizar ahora» lance también Google Calendar, *Actions*: **Read and write** (si ya tienes el token, edítalo en GitHub y añade este permiso; no hace falta cambiarlo en Nora).
    5. Pulsa **Generate token** y copia el `github_pat_…`. Solo se muestra una vez.
 
 **En cada dispositivo** (empieza por el que tenga los datos buenos):
@@ -78,7 +78,7 @@ La hora y cuándo salen las tareas con aviso y las vencidas se eligen en ⚙️ 
    - `CALLMEBOT_APIKEY`: tu `apikey`.
 3. Pruébalo: **Actions → Avisos por WhatsApp → Run workflow → Run workflow**. Te llega el mensaje de hoy marcado como «(prueba)», aunque no haya nada. Si desmarcas «Enviar», solo lo muestra en el registro sin mandarlo.
 
-GitHub lo lanza cada hora con unos minutos de retraso; si un envío falla, lo reintenta cada hora ese mismo día. Si al final no se ha podido enviar (o no se ha llegado a ejecutar), Panel lo dice con un aviso ⚠️ en Inicio y en Configuración → Avisos por WhatsApp. El motivo está en el registro de **Actions** de `panel-data` (por ejemplo, si faltan los Secrets o CallMeBot rechazó el mensaje). Cada aviso guarda su resultado en `avisos-estado.json`, así que `panel-data` tiene un commit automático al día.
+GitHub lo lanza cada hora con unos minutos de retraso (y, como a veces se salta alguna, también cada 15 minutos entre las 5 y las 9 UTC, alrededor de las 7 de España); si un envío falla, lo reintenta cada hora ese mismo día. Si al final no se ha podido enviar (o no se ha llegado a ejecutar), Panel lo dice con un aviso ⚠️ en Inicio y en Configuración → Avisos por WhatsApp. El motivo está en el registro de **Actions** de `panel-data` (por ejemplo, si faltan los Secrets o CallMeBot rechazó el mensaje). Cada aviso guarda su resultado en `avisos-estado.json`, así que `panel-data` tiene un commit automático al día.
 
 ## 6. Google Calendar
 
@@ -86,7 +86,9 @@ Cada hora (en la misma ejecución que los avisos), `panel-data` sincroniza con t
 - **Nora → Google:** los días libres (vacaciones, libre disposición y otros, con su estado: «(pedido)», «(por pedir)») y las tareas pendientes con fecha aparecen en un calendario propio llamado **Nora**, como eventos de día completo. Lo pasado no sale. Solo títulos y fechas, nunca notas. Ese calendario lo lleva Nora: lo que cambies o crees allí a mano se sobrescribe o se borra.
 - **Google → Nora:** los eventos que se repiten **cada año** de un calendario aparte «Cumpleaños» pasan a Nora como tareas periódicas 🎂 con aviso 7 días antes (salen en Inicio y en el WhatsApp). Si cambias el nombre o el día en Google, se actualiza; si lo quitas de Google, se quita de Nora; si lo borras en Nora, no vuelve. Cámbialos en Google, no en Nora.
 
-Los cambios tardan como mucho una hora en llegar (si tienes prisa: **Actions → Google Calendar → Run workflow**).
+En el calendario «Nora» salen también las fiestas nacionales y el 24 y 31 de diciembre (de hoy a final del año que viene), y los festivos que marques en Trabajo como «Festivo fijado por la empresa».
+
+Los cambios tardan como mucho una hora en llegar. Si tienes prisa: **Configuración → Sincronizar ahora** (si el token tiene el permiso *Actions*) o **Actions → Google Calendar → Run workflow**.
 
 **Una sola vez (unos 15 minutos):**
 1. **Proyecto de Google Cloud:** en [console.cloud.google.com](https://console.cloud.google.com) crea un proyecto (por ejemplo, `nora`).
