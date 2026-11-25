@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.4';
+const APP_VERSION = 'panel-2026-11-25.5';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -394,17 +394,19 @@ function openTareaForm(existing, preset = {}) {
 
 /* ---------------- Listas (compra, AliExpress, regalos…) ----------------
    No son tareas: cosas sueltas que se apuntan para no olvidarlas. Dos colecciones, sincronizadas registro a registro:
-   - db.listas: { id, u, nombre, icono, inicio (mostrar en Inicio), creada (ms, para el orden) }
-   - db.elementos: { id, u, lista, texto, nota, hecho, creado (ms, para el orden) }
+   - db.listas: { id, u, nombre, icono, inicio (mostrar en Inicio), creada (ms), orden }
+   - db.elementos: { id, u, lista, texto, nota, hecho, creado (ms), orden }
+   Orden: «orden» si se ha reordenado (mantener pulsado y arrastrar) y, si no, la fecha de creación: lo nuevo va al final.
    Lo tachado se queda plegado al final hasta que se quita con «Quitar tachados». */
 const ICONOS_LISTA = ['🛒', '📦', '🎁', '🎅', '🏠', '💊', '🧰', '👕', '📚', '✈️', '🍽️', '📝'];
 const lista = id => db.listas.find(l => l.id === id);
 const elemento = id => db.elementos.find(e => e.id === id);
-const listasOrden = () => [...db.listas].sort((a, b) => (a.creada || 0) - (b.creada || 0));
+const ordenDe = x => x.orden ?? x.creada ?? x.creado ?? 0;
+const listasOrden = () => [...db.listas].sort((a, b) => ordenDe(a) - ordenDe(b));
 const quedan = id => db.elementos.filter(e => e.lista === id && !e.hecho).length;
 const cosasTxt = n => n ? plural(n, 'cosa', 'cosas') : 'Vacía';
-const listaRow = (l, enInicio = false) => `<button class="row" data-act="abrirLista" data-id="${l.id}"><span class="ico" style="background:var(--line)">${l.icono || '📝'}</span><div class="main"><div class="name">${esc(l.nombre)}</div><div class="sub">${cosasTxt(quedan(l.id))}${!enInicio && l.inicio ? ' · en Inicio' : ''}</div></div><span class="chev">›</span></button>`;
-const elementoRow = e => `<div class="row ${e.hecho ? 'done' : ''}"><button class="check ${e.hecho ? 'on' : ''}" data-act="toggleElemento" data-id="${e.id}" aria-label="${e.hecho ? 'Quitar el tachado' : 'Tachar'}"></button>
+const listaRow = (l, enInicio = false) => `<button class="row" data-act="abrirLista" data-id="${l.id}" ${enInicio ? '' : `data-oid="${l.id}"`}><span class="ico" style="background:var(--line)">${l.icono || '📝'}</span><div class="main"><div class="name">${esc(l.nombre)}</div><div class="sub">${cosasTxt(quedan(l.id))}${!enInicio && l.inicio ? ' · en Inicio' : ''}</div></div><span class="chev">›</span></button>`;
+const elementoRow = e => `<div class="row ${e.hecho ? 'done' : ''}" ${e.hecho ? '' : `data-oid="${e.id}"`}><button class="check ${e.hecho ? 'on' : ''}" data-act="toggleElemento" data-id="${e.id}" aria-label="${e.hecho ? 'Quitar el tachado' : 'Tachar'}"></button>
   <button class="rowmain" data-act="editElemento" data-id="${e.id}"><div class="main"><div class="name">${esc(e.texto)}</div>${e.nota ? `<div class="sub">${esc(e.nota)}</div>` : ''}</div></button></div>`;
 
 function viewListas() {
@@ -416,7 +418,7 @@ function viewListas() {
       : `<div class="empty-state">Para lo que no es una tarea pero no quieres olvidar: la compra, lo que pedir por AliExpress, ideas de regalos…<br>Pulsa <b>+</b> para crear tu primera lista.</div>`;
   }
   const items = db.elementos.filter(e => e.lista === l.id);
-  const pend = items.filter(e => !e.hecho).sort((a, b) => (a.creado || 0) - (b.creado || 0));
+  const pend = items.filter(e => !e.hecho).sort((a, b) => ordenDe(a) - ordenDe(b));
   const hechos = items.filter(e => e.hecho).sort((a, b) => (b.u || 0) - (a.u || 0));
   const borrador = ui.borrador?.lista === l.id ? ui.borrador.texto : '';
   return `<div class="lista-cab"><button class="link" data-act="cerrarLista">‹ Listas</button><button class="link" data-act="editLista">Editar lista</button></div>
@@ -1157,7 +1159,7 @@ document.addEventListener('change', ev => {
 let sx = null, sy = null;
 $('#view').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
 $('#view').addEventListener('touchend', e => {
-  if (sx === null) return;
+  if (sx === null || reordenando) return;
   const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
   if (sheets.length || !(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5)) return;
   if (ui.tab === 'trabajo' && ui.vistaTrabajo === 'mes') (dx < 0 ? mainActions.calNext : mainActions.calPrev)();
@@ -1168,6 +1170,45 @@ $('#view').addEventListener('touchend', e => {
   } else if (ui.tab === 'listas' && ui.lista && dx > 0) mainActions.cerrarLista();
   else if (ui.tab === 'gastos') Savey.swipe(dx);
 }, { passive: true });
+
+/* Reordenar listas (en el resumen) y lo apuntado dentro de una lista: mantener pulsado medio segundo y arrastrar,
+   como en las apps del móvil. Si el dedo se mueve antes, es un desplazamiento normal. Al soltar se guarda el nuevo
+   orden («orden» = posición) de todo el grupo. */
+let reordenando = null;
+$('#view').addEventListener('pointerdown', ev => {
+  const row = ev.target.closest('[data-oid]');
+  if (!row || ev.button > 0 || (ui.tab !== 'listas')) return;
+  const x0 = ev.clientX, y0 = ev.clientY;
+  const cancelar = () => { clearTimeout(timer); window.removeEventListener('pointermove', previo); window.removeEventListener('pointerup', cancelar); window.removeEventListener('pointercancel', cancelar); };
+  const previo = e => { if (Math.hypot(e.clientX - x0, e.clientY - y0) > 8) cancelar(); };
+  const timer = setTimeout(() => { cancelar(); empezarArrastre(row, y0); }, 450);
+  window.addEventListener('pointermove', previo); window.addEventListener('pointerup', cancelar); window.addEventListener('pointercancel', cancelar);
+});
+function empezarArrastre(row, y0) {
+  const filas = () => [...row.parentNode.children].filter(n => n.dataset?.oid);
+  reordenando = { row, y: y0 }; sx = null;
+  row.classList.add('arrastrando'); navigator.vibrate?.(15);
+  const mover = e => {
+    const dy = e.clientY - reordenando.y;
+    row.style.transform = `translateY(${dy}px)`;
+    // si pasa la mitad de la fila de al lado, se cambia de sitio con ella
+    const l = filas(), i = l.indexOf(row), sig = l[i + 1], ant = l[i - 1];
+    if (sig && dy > sig.offsetHeight / 2) { sig.after(row); reordenando.y += sig.offsetHeight; row.style.transform = `translateY(${e.clientY - reordenando.y}px)`; }
+    else if (ant && dy < -ant.offsetHeight / 2) { ant.before(row); reordenando.y -= ant.offsetHeight; row.style.transform = `translateY(${e.clientY - reordenando.y}px)`; }
+  };
+  const soltar = () => {
+    window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); window.removeEventListener('pointercancel', soltar);
+    const ids = filas().map(n => n.dataset.oid), coleccion = ui.lista ? db.elementos : db.listas;
+    ids.forEach((id, i) => { const x = coleccion.find(c => c.id === id); if (x) x.orden = i; });
+    save(); render();
+    setTimeout(() => { reordenando = null; }, 0); // el clic que llega al soltar no abre nada
+  };
+  window.addEventListener('pointermove', mover); window.addEventListener('pointerup', soltar); window.addEventListener('pointercancel', soltar);
+}
+// Mientras se arrastra, la página no se desplaza; y el clic de después de soltar no cuenta
+document.addEventListener('touchmove', e => { if (reordenando) e.preventDefault(); }, { passive: false });
+document.addEventListener('click', e => { if (reordenando) { e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener('contextmenu', e => { if (e.target.closest?.('[data-oid]')) e.preventDefault(); });
 
 function applyTheme() {
   const th = db.settings.theme;
