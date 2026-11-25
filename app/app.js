@@ -5,7 +5,7 @@
 
 // Versión de la app = fecha de publicación + nº de publicación de ese día ('panel-AAAA-MM-DD.N').
 // Tiene que coincidir siempre con CACHE de sw.js: se cambian las dos juntas en cada publicación.
-const APP_VERSION = 'panel-2026-11-25.5';
+const APP_VERSION = 'panel-2026-11-25.6';
 // '2026-11-19.2' -> '19/11/2026 · 2' (las versiones antiguas, 'v7', se muestran tal cual)
 const fmtVersion = v => { const m = String(v).replace('panel-', '').match(/^(\d{4}-\d{2}-\d{2})\.(\d+)$/); return m ? `${fmtDia(m[1])} · ${m[2]}` : String(v).replace('panel-', ''); };
 const KEY = 'panel.db.v1';
@@ -227,7 +227,8 @@ const FILTROS = [['todas', 'Todas'], ['personal', 'Personal'], ['trabajo', 'Trab
 const tarea = id => db.tareas.find(t => t.id === id);
 // Domingo de esta semana (la semana empieza en lunes)
 const finSemana = () => { const d = new Date(); d.setDate(d.getDate() + (7 - d.getDay()) % 7); return dayKey(d); };
-const porTarea = (a, b) => (a.fecha || '9999').localeCompare(b.fecha || '9999') || ORDEN_PRIO[a.prioridad] - ORDEN_PRIO[b.prioridad] || (a.creada || '').localeCompare(b.creada || '');
+// Por fecha; dentro del mismo día (o sin fecha), el orden puesto a mano (mantener pulsado y arrastrar) y luego prioridad
+const porTarea = (a, b) => (a.fecha || '9999').localeCompare(b.fecha || '9999') || (a.orden ?? 1e9) - (b.orden ?? 1e9) || ORDEN_PRIO[a.prioridad] - ORDEN_PRIO[b.prioridad] || (a.creada || '').localeCompare(b.creada || '');
 // Los cumpleaños (de Google Calendar) van en Periódicas, en su sección; en «Todas» solo cuando ya están dentro de su aviso, y nunca en Personal
 const esCumple = t => t.tipo === 'cumple';
 const cumpleFiltro = (t, f) => !f || (f === 'todas' ? !esCumple(t) || enAviso(t) : f === 'repite' ? !!t.repite : t.ambito === f && !esCumple(t));
@@ -270,20 +271,24 @@ function migrarCaducidades(d) {
   d.caducidades = [];
 }
 
-function tareaRow(t, conAmbito = false) {
+// ord: si se puede reordenar, el grupo dentro del que se mueve (la fecha, o 'sin' sin fecha)
+function tareaRow(t, conAmbito = false, ord = null) {
   const hecha = t.estado === 'hecha', n = t.fecha ? diasHasta(t.fecha) : null, conAviso = !hecha && t.fecha && t.avisoDias != null;
   const fechaTxt = t.fecha ? (conAviso ? fmtDia(t.fecha) : `<span class="${!hecha && n < 0 ? 'red' : ''}">${fmtDia(t.fecha)} · ${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>`) : '';
   const sub = [fechaTxt, t.repite ? '🔁 ' + textoRepite(t.repite) : '', conAmbito ? AMBITOS[t.ambito] : '', t.notas ? esc(t.notas) : ''].filter(Boolean).join(' · ');
   const tag = conAviso ? `<span class="tag ${enAviso(t) ? 'red' : ''}">${n < 0 ? 'vencida ' : ''}${textoDias(n)}</span>` : '';
   const ic = iconoTarea(t) ? `<span class="tico">${esc(iconoTarea(t))}</span>` : '';
-  return `<div class="row ${hecha ? 'done' : ''}"><button class="check ${hecha ? 'on' : ''}" data-act="toggleTarea" data-id="${t.id}" aria-label="${hecha ? 'Marcar como pendiente' : 'Marcar como hecha'}"></button>
+  return `<div class="row ${hecha ? 'done' : ''}" ${ord ? `data-oid="${t.id}" data-ogrp="${ord}"` : ''}><button class="check ${hecha ? 'on' : ''}" data-act="toggleTarea" data-id="${t.id}" aria-label="${hecha ? 'Marcar como pendiente' : 'Marcar como hecha'}"></button>
     <button class="rowmain" data-act="editTarea" data-id="${t.id}"><div class="main"><div class="name"><span class="dot" style="background:${PRIORIDADES[t.prioridad]?.color}"></span>${ic}${esc(t.titulo)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${tag}</button></div>`;
 }
-function gruposTareas(list, conAmbito, sinFechaArriba = false) {
+function gruposTareas(list, conAmbito, sinFechaArriba = false, ordenable = false) {
   const h = hoy(), fs = finSemana();
+  // Se pueden reordenar las sin fecha y las que comparten día (si hay más de una)
+  const n = {}; for (const t of list) n[t.fecha || 'sin'] = (n[t.fecha || 'sin'] || 0) + 1;
+  const ord = t => ordenable && n[t.fecha || 'sin'] > 1 ? t.fecha || 'sin' : null;
   const g = [...(sinFechaArriba ? [['Sin fecha', t => !t.fecha]] : []), ['Vencidas', t => t.fecha && t.fecha < h], ['Hoy', t => t.fecha === h], ['Esta semana', t => t.fecha && t.fecha > h && t.fecha <= fs],
     ['Se acerca', t => t.fecha && t.fecha > fs && enAviso(t)], ['Más adelante', t => t.fecha && t.fecha > fs && !enAviso(t)], ...(sinFechaArriba ? [] : [['Sin fecha', t => !t.fecha]])];
-  return g.map(([titulo, f]) => { const l = list.filter(f); return l.length ? `<div class="grp">${titulo}</div>${l.map(t => tareaRow(t, conAmbito)).join('')}` : ''; }).join('');
+  return g.map(([titulo, f]) => { const l = list.filter(f); return l.length ? `<div class="grp">${titulo}</div>${l.map(t => tareaRow(t, conAmbito, ord(t))).join('')}` : ''; }).join('');
 }
 function viewTareas() {
   const filtro = FILTROS.some(([k]) => k === ui.filtroTareas) ? ui.filtroTareas : 'todas';
@@ -295,7 +300,7 @@ function viewTareas() {
   const lejos = t => esCumple(t) && !enAviso(t);
   const cumples = filtro === 'repite' ? pend.filter(lejos) : [], resto = filtro === 'repite' ? pend.filter(t => !lejos(t)) : pend;
   const secCumples = cumples.length ? `<button class="fold" data-act="toggleCumples">${ui.verCumples ? '▾' : '▸'} 🎂 Cumpleaños (${cumples.length})</button>${ui.verCumples ? cumples.map(t => tareaRow(t)).join('') : ''}` : '';
-  return `${seg}${pend.length ? gruposTareas(resto, filtro === 'todas' || filtro === 'repite', true) + secCumples : `<div class="empty-state">${vacio}<br>Pulsa <b>+</b> para añadir.</div>`}
+  return `${seg}${pend.length ? gruposTareas(resto, filtro === 'todas' || filtro === 'repite', true, true) + secCumples : `<div class="empty-state">${vacio}<br>Pulsa <b>+</b> para añadir.</div>`}
     ${hechas.length ? `<button class="fold" data-act="toggleCompletadas">${ui.verCompletadas ? '▾' : '▸'} Completadas (${hechas.length})</button>${ui.verCompletadas ? hechas.map(t => tareaRow(t, filtro === 'todas')).join('') : ''}` : ''}`;
 }
 
@@ -1171,13 +1176,13 @@ $('#view').addEventListener('touchend', e => {
   else if (ui.tab === 'gastos') Savey.swipe(dx);
 }, { passive: true });
 
-/* Reordenar listas (en el resumen) y lo apuntado dentro de una lista: mantener pulsado medio segundo y arrastrar,
+/* Reordenar listas (en el resumen), lo apuntado dentro de una lista y, en Tareas, las sin fecha o del mismo día: mantener pulsado medio segundo y arrastrar,
    como en las apps del móvil. Si el dedo se mueve antes, es un desplazamiento normal. Al soltar se guarda el nuevo
    orden («orden» = posición) de todo el grupo. */
 let reordenando = null;
 $('#view').addEventListener('pointerdown', ev => {
   const row = ev.target.closest('[data-oid]');
-  if (!row || ev.button > 0 || (ui.tab !== 'listas')) return;
+  if (!row || ev.button > 0 || !['listas', 'tareas'].includes(ui.tab)) return;
   const x0 = ev.clientX, y0 = ev.clientY;
   const cancelar = () => { clearTimeout(timer); window.removeEventListener('pointermove', previo); window.removeEventListener('pointerup', cancelar); window.removeEventListener('pointercancel', cancelar); };
   const previo = e => { if (Math.hypot(e.clientX - x0, e.clientY - y0) > 8) cancelar(); };
@@ -1185,7 +1190,7 @@ $('#view').addEventListener('pointerdown', ev => {
   window.addEventListener('pointermove', previo); window.addEventListener('pointerup', cancelar); window.addEventListener('pointercancel', cancelar);
 });
 function empezarArrastre(row, y0) {
-  const filas = () => [...row.parentNode.children].filter(n => n.dataset?.oid);
+  const filas = () => [...row.parentNode.children].filter(n => n.dataset?.oid && n.dataset.ogrp === row.dataset.ogrp);
   reordenando = { row, y: y0 }; sx = null;
   row.classList.add('arrastrando'); navigator.vibrate?.(15);
   const mover = e => {
@@ -1198,7 +1203,7 @@ function empezarArrastre(row, y0) {
   };
   const soltar = () => {
     window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); window.removeEventListener('pointercancel', soltar);
-    const ids = filas().map(n => n.dataset.oid), coleccion = ui.lista ? db.elementos : db.listas;
+    const ids = filas().map(n => n.dataset.oid), coleccion = ui.tab === 'tareas' ? db.tareas : ui.lista ? db.elementos : db.listas;
     ids.forEach((id, i) => { const x = coleccion.find(c => c.id === id); if (x) x.orden = i; });
     save(); render();
     setTimeout(() => { reordenando = null; }, 0); // el clic que llega al soltar no abre nada
